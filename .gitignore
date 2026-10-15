@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.agent-relay/
+artifacts/
+.env
+.env.*
+!.env.example
+*.log
+*.db
+*.db-shm
+*.db-wal
