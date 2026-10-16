@@ -33,6 +33,7 @@ export class Controller {
   private active: Active | null = null;
   private ticking = false;
   private closing = false;
+  private failure: unknown = null;
   constructor(tasks: Tasks, evidence: Evidence, executor: Executor) {
     this.tasks = tasks;
     this.runs = new Runs(tasks);
@@ -40,6 +41,7 @@ export class Controller {
     this.executor = executor;
   }
   async tick(): Promise<void> {
+    if (this.failure !== null) throw this.failure;
     if (this.ticking || this.closing) return;
     this.ticking = true;
     try {
@@ -96,9 +98,13 @@ export class Controller {
       const stopping = new Promise<string>((resolve) => {
         stop = resolve;
       });
-      const done = this.execute(run, stopping).finally(() => {
-        this.active = null;
-      });
+      const done = this.execute(run, stopping)
+        .catch((error) => {
+          this.failure = error;
+        })
+        .finally(() => {
+          this.active = null;
+        });
       this.active = { run, done, stop };
     } finally {
       this.ticking = false;
@@ -106,6 +112,7 @@ export class Controller {
   }
   async wait(): Promise<void> {
     await this.active?.done;
+    if (this.failure !== null) throw this.failure;
   }
   async close(): Promise<void> {
     this.closing = true;

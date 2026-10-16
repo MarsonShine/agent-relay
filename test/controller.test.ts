@@ -234,3 +234,19 @@ test('artifact size failure cannot be reported as success', async (t) => {
   assert.equal(tasks.get(task.id).status, 'blocked');
   assert.match(tasks.get(task.id).diagnostic!, /size limit/);
 });
+
+test('persistent storage failure halts dispatch without an unhandled execution rejection', async (t) => {
+  const { tasks, controller, db } = setup(
+    t,
+    replacement((result) => result),
+  );
+  const task = tasks.create(request());
+  await controller.tick();
+  db.sql.exec(
+    "CREATE TRIGGER injected_storage_failure BEFORE UPDATE ON tasks BEGIN SELECT RAISE(FAIL, 'injected disk failure'); END",
+  );
+  await assert.rejects(controller.wait(), /injected disk failure/);
+  await assert.rejects(controller.tick(), /injected disk failure/);
+  assert.equal(tasks.get(task.id).status, 'running');
+  assert.equal(controller.runs.outstanding().length, 1);
+});
