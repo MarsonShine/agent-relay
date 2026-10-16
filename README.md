@@ -15,7 +15,7 @@ Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它�
 
 ## 开发与运行
 
-工具链固定为 Node **26.8.2**、npm **11.14.1**、TypeScript **5.9.3**；版本分别记录于 `.node-version`、`package.json` 和锁文件。使用内置 `node:sqlite`，无需另装数据库服务。
+工具链固定为 Node **26.8.2**、npm **11.14.1**、TypeScript **5.9.3**；版本分别记录于 `.node-version`、`package.json` 和锁文件。使用内置 `node:sqlite`，无需另装数据库服务。文本换行由 `.gitattributes` 固定为 LF，Windows 检出同样遵守格式门禁。
 
 ```powershell
 npm ci
