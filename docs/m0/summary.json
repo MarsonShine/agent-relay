@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-16",
+  "milestoneStatus": "blocked",
+  "codexVersion": "0.162.0-alpha.17.2",
+  "nodeVersion": "26.8.2",
+  "requestedModel": "gpt-6-astra",
+  "actualModelVerified": false,
+  "explicitResumeSameSession": true,
+  "scenarios": [
+    {
+      "scenario": "invalid-effort",
+      "exitCode": 1,
+      "outcome": "failed",
+      "terminal": "turn.failed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 4656,
+      "schemaValid": false,
+      "agentStatus": null,
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": null
+    },
+    {
+      "scenario": "no-auth",
+      "exitCode": 1,
+      "outcome": "failed",
+      "terminal": "turn.failed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 2551,
+      "schemaValid": false,
+      "agentStatus": null,
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": null
+    },
+    {
+      "scenario": "inspect",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 25456,
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 77544,
+        "cached_input_tokens": 52608,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 231,
+        "reasoning_output_tokens": 19
+      }
+    },
+    {
+      "scenario": "edit",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 15391,
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 52611,
+        "cached_input_tokens": 28544,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 176,
+        "reasoning_output_tokens": 9
+      }
+    },
+    {
+      "scenario": "resume",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 20327,
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 124479,
+        "cached_input_tokens": 99328,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 411,
+        "reasoning_output_tokens": 41
+      }
+    },
+    {
+      "scenario": "permission",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 13433,
+      "schemaValid": true,
+      "agentStatus": "denied",
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 28924,
+        "cached_input_tokens": 14208,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 122,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "scenario": "cancel",
+      "exitCode": 1,
+      "outcome": "stopped",
+      "terminal": null,
+      "stopReason": "requested_cancel",
+      "treeStop": "command_succeeded",
+      "durationMs": 2096,
+      "schemaValid": false,
+      "agentStatus": null,
+      "fixtureCheckExit": 1,
+      "mathUnchanged": true,
+      "deniedFileExists": false,
+      "usage": null
+    }
+  ]
+}
