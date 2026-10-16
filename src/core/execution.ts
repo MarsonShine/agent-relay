@@ -1,6 +1,13 @@
 import { z } from 'zod';
-import { evidenceSchema, questionSchema } from './contracts.ts';
-import type { Run, Task } from './contracts.ts';
+import {
+  evidenceSchema,
+  questionSchema,
+  taskSchema,
+  runSchema,
+  artifactSchema,
+  decisionSchema,
+} from './contracts.ts';
+import type { Run } from './contracts.ts';
 
 export const agentEventSchema = z.strictObject({
   schemaVersion: z.literal(1),
@@ -41,10 +48,39 @@ export const resultSchema = z.strictObject({
     .nullable(),
 });
 export type ExecutionResult = z.infer<typeof resultSchema>;
-export interface ExecutionRequest {
-  task: Task;
-  run: Run;
-}
+export const executionRequestSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    task: taskSchema,
+    run: runSchema,
+    artifacts: z.array(artifactSchema).max(200),
+    decisions: z.array(decisionSchema).max(100),
+  })
+  .superRefine((request, context) => {
+    const evidenceMatches = (evidence: z.infer<typeof evidenceSchema>) =>
+      evidence.requirementVersion === request.task.requirementVersion &&
+      evidence.codeRevision === request.task.codeRevision;
+    if (
+      request.run.taskId !== request.task.id ||
+      !evidenceMatches(request.run.evidence) ||
+      request.artifacts.some(
+        (artifact) =>
+          artifact.taskId !== request.task.id ||
+          !evidenceMatches(artifact.evidence),
+      ) ||
+      request.decisions.some(
+        (decision) =>
+          decision.taskId !== request.task.id ||
+          decision.requirementVersion > request.task.requirementVersion,
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'handoff does not match task and evidence version',
+      });
+    }
+  });
+export type ExecutionRequest = z.infer<typeof executionRequestSchema>;
 export interface ExecutionHandle {
   events: AsyncIterable<AgentEvent>;
   result: Promise<ExecutionResult>;

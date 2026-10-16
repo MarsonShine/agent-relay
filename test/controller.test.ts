@@ -1,3 +1,4 @@
+import { executionRequestSchema } from '../src/core/execution.ts';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -249,4 +250,53 @@ test('persistent storage failure halts dispatch without an unhandled execution r
   await assert.rejects(controller.tick(), /injected disk failure/);
   assert.equal(tasks.get(task.id).status, 'running');
   assert.equal(controller.runs.outstanding().length, 1);
+});
+
+test('handoff carries actual decisions and excludes artifacts from older requirements', async (t) => {
+  const executor = new FakeExecutor();
+  const captured: ExecutionRequest[] = [];
+  const start = executor.start.bind(executor);
+  executor.start = async (request) => {
+    captured.push(request);
+    return start(request);
+  };
+  const { tasks, controller } = setup(t, executor);
+  const input = request();
+  input.config.profiles.design.native.scenario = 'input';
+  const task = tasks.create(input);
+  await controller.tick();
+  await controller.wait();
+  const waiting = tasks.get(task.id);
+  tasks.command(task.id, {
+    action: 'answer',
+    expectedVersion: waiting.version,
+    questionId: waiting.question!.id,
+    questionVersion: waiting.question!.version,
+    answer: 'Preserve the existing public interface.',
+  });
+  await controller.tick();
+  await controller.wait();
+  assert.equal(captured[1]?.schemaVersion, 1);
+  assert.equal(
+    captured[1]?.decisions[0]?.answer,
+    'Preserve the existing public interface.',
+  );
+  assert.equal(captured[1]?.decisions[0]?.requirementVersion, 2);
+  assert.deepEqual(captured[1]?.artifacts, []);
+  assert.equal(
+    executionRequestSchema.safeParse({ ...captured[1], schemaVersion: 2 })
+      .success,
+    false,
+  );
+  assert.equal(
+    executionRequestSchema.safeParse({
+      ...captured[1],
+      run: {
+        ...captured[1]!.run,
+        taskId: '00000000-0000-4000-8000-000000000000',
+      },
+    }).success,
+    false,
+  );
+  assert.equal(tasks.get(task.id).status, 'succeeded');
 });

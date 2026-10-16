@@ -19,7 +19,13 @@ for (const scenario of [
     const task = tasks.create(input);
     const run = new Runs(tasks).claim(task.id, 'fake-v1')!;
     const executor = new FakeExecutor();
-    const handle = await executor.start({ task, run });
+    const handle = await executor.start({
+      schemaVersion: 1,
+      task,
+      run,
+      artifacts: [],
+      decisions: [],
+    });
     const events: AgentEvent[] = [];
     for await (const event of handle.events) events.push(event);
     const result = await handle.result;
@@ -51,7 +57,13 @@ test('cancellation confirms fake process exit; a new adapter cannot guess its id
   const task = tasks.create(input);
   const run = new Runs(tasks).claim(task.id, 'fake-v1')!;
   const executor = new FakeExecutor();
-  const handle = await executor.start({ task, run });
+  const handle = await executor.start({
+    schemaVersion: 1,
+    task,
+    run,
+    artifacts: [],
+    decisions: [],
+  });
   for await (const event of handle.events) {
     if (event.type === 'started')
       assert.equal(await executor.cancel(run), 'stopped');
@@ -59,7 +71,10 @@ test('cancellation confirms fake process exit; a new adapter cannot guess its id
   assert.equal((await handle.result).status, 'cancelled');
   assert.equal(await new FakeExecutor().reconcile(run), 'unknown');
   await assert.rejects(
-    executor.continue({ task, run }, 'opaque'),
+    executor.continue(
+      { schemaVersion: 1, task, run, artifacts: [], decisions: [] },
+      'opaque',
+    ),
     /does not support/,
   );
 });
@@ -71,7 +86,13 @@ test('finite timeout stops a silent fake process', async (t) => {
   input.config.profiles.design.timeoutMs = 500;
   const task = tasks.create(input);
   const run = new Runs(tasks).claim(task.id, 'fake-v1')!;
-  const handle = await new FakeExecutor().start({ task, run });
+  const handle = await new FakeExecutor().start({
+    schemaVersion: 1,
+    task,
+    run,
+    artifacts: [],
+    decisions: [],
+  });
   for await (const _event of handle.events) {
     /* consume stream */
   }

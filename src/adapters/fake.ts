@@ -164,7 +164,10 @@ export class FakeExecutor implements Executor {
       JSON.stringify({
         native: request.run.profile.native,
         evidence: request.run.evidence,
-        answered: request.task.requirementVersion > 1,
+        answered: request.decisions.some(
+          (decision) =>
+            decision.requirementVersion === request.task.requirementVersion,
+        ),
       }),
     );
     return { events: events as AsyncIterable<AgentEvent>, result };

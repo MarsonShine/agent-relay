@@ -1,4 +1,8 @@
-import { agentEventSchema, resultSchema } from '../core/execution.ts';
+import {
+  agentEventSchema,
+  resultSchema,
+  executionRequestSchema,
+} from '../core/execution.ts';
 import type { ExecutionResult, Executor } from '../core/execution.ts';
 import type { Run, Task } from '../core/contracts.ts';
 import { RelayError } from '../core/errors.ts';
@@ -153,7 +157,21 @@ export class Controller {
     );
     const terminalEvents = new Set<string>();
     const processResult = async (): Promise<ExecutionResult> => {
-      const handle = await this.executor.start({ task, run });
+      const request = executionRequestSchema.parse({
+        schemaVersion: 1,
+        task,
+        run,
+        decisions: this.tasks.decisions(task.id),
+        artifacts: this.evidence
+          .list(task.id)
+          .filter(
+            (artifact) =>
+              artifact.evidence.requirementVersion ===
+                task.requirementVersion &&
+              artifact.evidence.codeRevision === task.codeRevision,
+          ),
+      });
+      const handle = await this.executor.start(request);
       if (detached)
         throw new RelayError('conflict', 'execution start returned after stop');
       const consume = async () => {
