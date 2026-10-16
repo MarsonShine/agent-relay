@@ -1,6 +1,6 @@
 # 具体实现计划
 
-M1.1–M1.7 已实现，本机检查及 Windows/Linux CI 均通过。详见 [M1 契约与验收](m1.md)。M0 Windows 的修改、续接、活动工具取消和只读验收均通过；审批与 Windows 原生沙箱配置已修复，见 [M0 结果](m0/README.md)。M1 仍只使用模拟后端。M2–M4 未开始，API Agent 不阻塞 v1。
+M1.1–M1.7 已实现，本机检查及 Windows/Linux CI 均通过。详见 [M1 契约与验收](m1.md)。M0 Windows 的修改、续接、活动工具取消和只读验收均通过；审批与 Windows 原生沙箱配置已修复，见 [M0 结果](m0/README.md)。M1 仍只使用模拟后端。M2 已开始事件解析切片，M3–M4 未开始，API Agent 不阻塞 v1。
 
 ## M0：Codex CLI 接入验证（Windows 基线通过）
 
@@ -29,7 +29,7 @@ M1.1–M1.7 已实现，本机检查及 Windows/Linux CI 均通过。详见 [M1 
 
 ## M2：本地研发闭环（依赖 M1）
 
-- M2.1 实现 Codex CLI 适配器，使用 M0 事件样本验证流解析和版本行为。
+- M2.1 进行中：有界原生事件解析、版本限制及 M0 投影测试已完成；进程启动、结构化结果和续接接入尚未开始。见 [M2 契约](m2.md)。
 - M2.2 实现 worktree 管理、单写入者、基线提交和固定审查快照。
 - M2.3 实现 triage/design/implement/review 交接及语义校验。
 - M2.4 接入可信验证命令，保存退出码、日志、环境和 SHA。
