@@ -16,6 +16,12 @@ const migrations = [
     id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
     document TEXT NOT NULL CHECK(json_valid(document))
   ) STRICT;`,
+  `CREATE TABLE runs (
+    id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
+    document TEXT NOT NULL CHECK(json_valid(document)),
+    status TEXT GENERATED ALWAYS AS (json_extract(document, '$.status')) VIRTUAL
+  ) STRICT;
+  CREATE UNIQUE INDEX one_outstanding_run ON runs((1)) WHERE status != 'stopped';`,
 ];
 
 export class Database {
