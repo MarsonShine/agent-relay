@@ -16,11 +16,14 @@ import type {
 import { assertTransition, terminal } from '../core/state.ts';
 import { RelayError } from '../core/errors.ts';
 import type { Database } from './database.ts';
+import { redact } from './redaction.ts';
 
 export class Tasks {
   readonly db: Database;
-  constructor(db: Database) {
+  readonly secrets: readonly string[];
+  constructor(db: Database, secrets: readonly string[] = []) {
     this.db = db;
+    this.secrets = secrets;
   }
   get(id: string): Task {
     const row = this.db.sql
@@ -96,7 +99,12 @@ export class Tasks {
   // Internal transaction primitive; callers must hold db.transaction().
   save(previous: Task, next: Task): Task {
     assertTransition(previous.status, next.status);
-    const parsed = taskSchema.parse({ ...next, version: previous.version + 1 });
+    const parsed = taskSchema.parse({
+      ...next,
+      diagnostic:
+        next.diagnostic === null ? null : redact(next.diagnostic, this.secrets),
+      version: previous.version + 1,
+    });
     const result = this.db.sql
       .prepare(
         "UPDATE tasks SET document=? WHERE id=? AND json_extract(document,'$.version')=?",
@@ -187,6 +195,9 @@ export class Tasks {
     payload: string,
     at = Date.now(),
   ): Event {
+    payload = redact(payload, this.secrets);
+    if (Buffer.byteLength(payload) > 8192)
+      throw new RelayError('storage', 'event size limit exceeded');
     const old = this.db.sql
       .prepare('SELECT document FROM events WHERE task_id=? AND event_key=?')
       .get(taskId, key);

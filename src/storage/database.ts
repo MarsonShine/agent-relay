@@ -22,6 +22,11 @@ const migrations = [
     status TEXT GENERATED ALWAYS AS (json_extract(document, '$.status')) VIRTUAL
   ) STRICT;
   CREATE UNIQUE INDEX one_outstanding_run ON runs((1)) WHERE status != 'stopped';`,
+  `CREATE TABLE artifacts (
+    id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
+    run_id TEXT NOT NULL REFERENCES runs(id), kind TEXT NOT NULL,
+    document TEXT NOT NULL CHECK(json_valid(document)), UNIQUE(run_id, kind)
+  ) STRICT;`,
 ];
 
 export class Database {
