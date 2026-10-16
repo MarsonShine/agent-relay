@@ -15,7 +15,7 @@ M1.1–M1.7 已实现，Windows 本机模拟验收通过；Windows/Linux CI 已�
 
 验收：至少证明调查→修改→反馈续接的真实链路；取消后不会有继续写入的遗留进程。不可验证的能力显式禁用。当前本机 alpha 版本只是观察值，不直接成为支持版本承诺。
 
-## M1：控制内核与执行契约（本机模拟验收已通过）
+## M1：控制内核与执行契约（依赖 M0；内核模拟验收通过）
 
 - [x] M1.1 初始化 TypeScript 项目，锁定工具链、格式/类型检查、Windows/Linux CI。
 - [x] M1.2 定义 Task、Run、Event、Artifact、Finding、Decision 及执行接口、schemaVersion。
