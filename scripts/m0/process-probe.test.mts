@@ -69,3 +69,20 @@ test('parent exit with a live descendant never implies successful completion', a
   // The controlled orphan exits itself; no unrelated process is signalled.
   await new Promise(r => setTimeout(r, 2200));
 });
+
+test('M0 approval modes preserve explicit review and reject unrestricted settings', async () => {
+  const { approvalConfig } = await import('./approval-config.mts');
+  assert.deepEqual(approvalConfig(undefined).args, ['-c', 'approval_policy="never"']);
+  assert.deepEqual(approvalConfig('auto-review').args, ['-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"']);
+  assert.throws(() => approvalConfig('always-allow'), /must be/);
+});
+
+test('external activity observer can cancel without waiting for another JSONL event', async () => {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 400);
+  try {
+    const result = await probe(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { cwd: process.cwd(), signal: abort.signal });
+    assert.equal(result.stopReason, 'requested_cancel');
+    assert.equal(result.outcome, 'stopped');
+  } finally { clearTimeout(timer); }
+});
