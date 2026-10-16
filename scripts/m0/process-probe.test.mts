@@ -86,3 +86,57 @@ test('external activity observer can cancel without waiting for another JSONL ev
     assert.equal(result.outcome, 'stopped');
   } finally { clearTimeout(timer); }
 });
+
+test('strict read-only review permits rule review but cannot approve sandbox or permission expansion', async () => {
+  const { approvalConfig } = await import('./approval-config.mts');
+  const config = approvalConfig('read-only-review');
+  assert.ok(config.args.includes('approval_policy={granular={sandbox_approval=false,rules=true,mcp_elicitations=false,request_permissions=false,skill_approval=false}}'));
+  assert.ok(config.args.includes('approvals_reviewer="auto_review"'));
+});
+
+test('read-only acceptance requires actual attempts, denials and unchanged workspace contents', async () => {
+  const { readOnlyAccepted, snapshotWorkspace } = await import('./readonly-evidence.mts');
+  const accepted = { inspection: false, outcome: 'turn_completed', status: 'denied', schemaValid: true, unchanged: true, attemptObserved: true, denialObserved: true };
+  assert.equal(readOnlyAccepted(accepted), true);
+  for (const change of [{ unchanged: false }, { attemptObserved: false }, { denialObserved: false }, { status: 'completed' }]) assert.equal(readOnlyAccepted({ ...accepted, ...change }), false);
+  assert.equal(readOnlyAccepted({ ...accepted, inspection: true, status: 'completed', denialObserved: false }), true);
+  const dir = await mkdtemp(join(tmpdir(), 'relay-readonly-snapshot-'));
+  const { writeFile, unlink } = await import('node:fs/promises');
+  try {
+    await writeFile(join(dir, 'sentinel'), 'before');
+    const before = await snapshotWorkspace(dir);
+    await writeFile(join(dir, 'sentinel'), 'after');
+    assert.notDeepEqual(await snapshotWorkspace(dir), before);
+    await unlink(join(dir, 'sentinel'));
+    assert.notDeepEqual(await snapshotWorkspace(dir), before);
+    await writeFile(join(dir, 'created'), 'new');
+    assert.notDeepEqual(await snapshotWorkspace(dir), before);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('ignoring user config does not omit the native Windows sandbox backend', async () => {
+  const { nativeSandboxConfig } = await import('./approval-config.mts');
+  assert.deepEqual(nativeSandboxConfig('win32'), ['-c', 'windows.sandbox="elevated"']);
+  assert.deepEqual(nativeSandboxConfig('linux'), []);
+});
+
+test('malformed patch is not permission denial; sandbox EPERM is denial', async () => {
+  const { permissionDenialObserved } = await import('./readonly-evidence.mts');
+  assert.equal(permissionDenialObserved('apply_patch verification failed: invalid patch: multiple operations target sentinel', ''), false);
+  assert.equal(permissionDenialObserved('patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings', ''), true);
+  assert.equal(permissionDenialObserved('', "Error: EPERM: operation not permitted, open 'shell-denied.txt'"), true);
+});
+
+test('supplemental probe budget stays finite and retains the six-call default', async () => {
+  const { probeCallLimit } = await import('./approval-config.mts');
+  assert.equal(probeCallLimit(undefined), 6);
+  assert.equal(probeCallLimit('8'), 8);
+  for (const value of ['0','9','Infinity','NaN','6.5','']) assert.throws(() => probeCallLimit(value), /integer/);
+});
+
+test('independent permission cases each need their own denial evidence', async () => {
+  const { permissionDenialObserved } = await import('./readonly-evidence.mts');
+  assert.equal(permissionDenialObserved('unrelated transport EPERM', ''), false);
+  assert.equal(permissionDenialObserved('apply_patch verification failed: invalid patch', 'EPERM', 'both'), false);
+  assert.equal(permissionDenialObserved('patch rejected: writing is blocked by read-only sandbox', 'EPERM', 'both'), true);
+});

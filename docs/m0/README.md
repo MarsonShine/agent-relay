@@ -1,6 +1,6 @@
 # M0：Codex CLI 接入实验
 
-日期：2026-10-16。状态：**部分完成；最新复验的真实调查→修改→续接与活动工具取消已通过，但只读权限隔离失败，M0 尚未通过。此前结果矩阵保留为历史记录，最新结论见末尾复验章节。**
+日期：2026-10-16。状态：**当前 Windows M0 基线已通过；只读配置问题已修复。** 初始实验和中间失败记录保留如下，最新结论与限制见末尾 M0-readonly-v2 章节。
 
 ## 已观测环境
 
@@ -65,7 +65,7 @@ node --test scripts/m0/process-probe.test.mts
 
 ```powershell
 $env:RELAY_CODEX_BIN = (Get-Command codex).Source
-$env:RELAY_CODEX_MODEL = 'gpt-6-astra'
+$env:RELAY_CODEX_MODEL = 'gpt-6-luna'
 $env:RELAY_M0_ROOT = '.agent-relay/m0-new'
 node scripts/m0/codex-probe.mts setup
 node scripts/m0/codex-probe.mts invalid-effort
@@ -102,3 +102,29 @@ scripts/m0 是实验工具，不是生产适配器：无实时持久化日志、
 复验机器可读证据见 [reverification.json](reverification.json)，仅保留协议投影、布尔判定和用量，原始会话、路径和文本仍在本机忽略目录。
 
 权限异常已明确复现，但尚未定位是 CLI 本体还是桌面工具路由的实现缺陷。当前记录只适用于本次 Windows 桌面继承权限环境，不推断其他环境同样失败。修复后的 Windows/Linux 模拟 CI 已通过，见 [M1 跨平台复验](../m1.md)，不会替代真实只读隔离验收。
+
+## 2026-10-16 只读问题根因与修复（M0-readonly-v2）
+
+**当前 M0 Windows 基线通过，按已验证能力进入 M2。** 本节取代前文只读阻塞结论；之前的失败记录不删除。新增证据见 [readonly-verification.json](readonly-verification.json)。
+
+根因在配置层，有两项直接证据：
+
+1. 上次写入对应的 guardian 会话明确返回 allow，认为用户授权了该单文件写入。on-request + auto_review 会审批越界动作，不能用作“绝不写入”的角色权限。对照 never 模式时，同样的写入被拒绝。
+2. 探针使用 ignore-user-config，漏掉本机已启用的 Windows 原生 sandbox=elevated 后端。禁用 sandbox_approval 后，旧配置连合法读取也要求越界审批。直接使用原生只读沙箱时，读取成功、写入返回 EPERM；显式保留后端后，模型的合法读取也成功。
+
+修复为 read-only-review：只保留 rules 审批，关闭 sandbox_approval、request_permissions、mcp_elicitations、skill_approval，并在 Windows 显式设置 windows.sandbox=elevated。它启用原生隔离，不是赋予 Agent 完整访问权限；现有规则、继承权限和认证均保留。官方依据：[审批与分类控制](https://learn.chatgpt.com/docs/agent-approvals-security)、[自动审批](https://learn.chatgpt.com/docs/sandboxing/auto-review)、[Windows 沙箱](https://learn.chatgpt.com/docs/windows/windows-sandbox)。
+
+复验同时要求实际工具证据和整个夹具（包括目录与 .git）的内容哈希不变。GPT-6 Luna 在修正配置下完成合法读取；固定且预先验证格式的新增/修改/删除补丁被权限层拒绝；shell 写入由原生沙箱返回 EPERM。无效补丁不能算权限拒绝，组合用例必须分别取得各路径的拒绝证据。
+
+本轮先运行六次；其中第六次补丁格式错误，未判通过。用户随后明确授权追加最多两次并改用 gpt-6-luna，实际合计八次，所有调用每次至多 180 秒。计数保存在同一账本，没有清零或换目录重置。后续真实调用默认 gpt-6-luna，不自动回退到其他模型；实际路由仍以可观测证据为准。
+
+有效读取示例（写入流程仍单独选用工作区写入策略）：
+
+```powershell
+$env:RELAY_CODEX_MODEL = 'gpt-6-luna'
+$env:RELAY_M0_APPROVAL = 'read-only-review'
+node scripts/m0/codex-probe.mts inspect
+node scripts/m0/codex-probe.mts permission-patch
+```
+
+探针结果目录包含动作、审批模式、原生沙箱和模型名；既有目录拒绝覆盖。默认六次预算；只有操作人明确授权增加时才设置 RELAY_M0_CALL_LIMIT，硬上限八次，增额保留历史计数。这里只证明当前 Windows/CLI 版本的读取与拒绝写入边界；真实 Linux Codex、写后崩溃恢复、软终止升级仍由后续里程碑验证。

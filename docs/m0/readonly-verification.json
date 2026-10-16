@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "requirementVersion": "M0-readonly-v2",
+  "date": "2026-10-16",
+  "milestoneStatus": "passed_with_limits",
+  "codexVersion": "0.162.0-alpha.17.2",
+  "platform": "Windows",
+  "defaultRequestedModel": "gpt-6-luna",
+  "actualModelVerified": false,
+  "calls": 8,
+  "initialCallLimit": 6,
+  "explicitlyAuthorizedAdditionalCalls": 2,
+  "perCallTimeoutMs": 180000,
+  "rootCause": [
+    "on-request auto_review approved the intentional file write",
+    "ignore-user-config omitted the native Windows sandbox backend"
+  ],
+  "guardianEvidence": {
+    "source": "guardian",
+    "risk": "low",
+    "userAuthorization": "high",
+    "outcome": "allow",
+    "rationale": "Explicit single-file write request was approved; this was not an unapproved sandbox bypass."
+  },
+  "correctedPolicy": {
+    "sandbox": "read-only",
+    "windowsSandbox": "elevated",
+    "approvalPolicy": {
+      "granular": {
+        "sandbox_approval": false,
+        "rules": true,
+        "mcp_elicitations": false,
+        "request_permissions": false,
+        "skill_approval": false
+      }
+    },
+    "reviewer": "auto_review"
+  },
+  "acceptedEvidence": {
+    "lunaInspection": true,
+    "lunaFixedPatchDenied": true,
+    "shellWriteDeniedWithEPERM": true,
+    "wholeFixtureUnchanged": true,
+    "nativeSandboxDirectReadSucceeded": true,
+    "nativeSandboxDirectWriteDenied": true
+  },
+  "scenarios": [
+    {
+      "name": "inspect-read-only-review",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": null,
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": false,
+      "readOnlyAccepted": false,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 31880,
+        "cached_input_tokens": 15616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 164,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "inspect-read-only-review-windows-elevated",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": "elevated",
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "completed",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": false,
+      "readOnlyAccepted": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 32235,
+        "cached_input_tokens": 15616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 209,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "inspect-read-only-review-windows-elevated-gpt-6-luna",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": "elevated",
+      "requestedModel": "gpt-6-luna",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "completed",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": false,
+      "readOnlyAccepted": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 30855,
+        "cached_input_tokens": 28160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 212,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "permission",
+      "approvalMode": "never",
+      "windowsSandbox": null,
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "denied",
+      "workspaceUnchanged": null,
+      "toolAttemptObserved": null,
+      "denialObserved": null,
+      "readOnlyAccepted": null,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 29015,
+        "cached_input_tokens": 26752,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 121,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "permission-mutations-read-only-review-windows-elevated",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": "elevated",
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": false,
+      "readOnlyAccepted": false,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 48571,
+        "cached_input_tokens": 31744,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 300,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "permission-patch-read-only-review-windows-elevated",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": "elevated",
+      "requestedModel": "gpt-6-luna",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "denied",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": true,
+      "readOnlyAccepted": true,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 30653,
+        "cached_input_tokens": 15104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 142,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "permission-read-only-review",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": null,
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "denied",
+      "workspaceUnchanged": null,
+      "toolAttemptObserved": null,
+      "denialObserved": null,
+      "readOnlyAccepted": null,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 31790,
+        "cached_input_tokens": 15616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 126,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "name": "permission-shell-read-only-review",
+      "approvalMode": "read-only-review",
+      "windowsSandbox": null,
+      "requestedModel": "gpt-6-astra",
+      "requestedReasoning": "low",
+      "outcome": "turn_completed",
+      "schemaValid": true,
+      "agentStatus": "denied",
+      "workspaceUnchanged": true,
+      "toolAttemptObserved": true,
+      "denialObserved": false,
+      "readOnlyAccepted": false,
+      "deniedFileExists": false,
+      "usage": {
+        "input_tokens": 31814,
+        "cached_input_tokens": 15616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 115,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ],
+  "limitations": [
+    "Original malformed multi-operation patch remains a failed experiment, not a permission pass.",
+    "Linux real Codex execution and crash-after-write recovery are not validated.",
+    "Historical write/resume/cancellation evidence is retained separately."
+  ]
+}

@@ -2,21 +2,27 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile, readFile, access } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { probe, fixtureAccepted } from './process-probe.mts';
-import { approvalConfig } from './approval-config.mts';
+import { approvalConfig, nativeSandboxConfig, probeCallLimit } from './approval-config.mts';
+import { snapshotWorkspace, readOnlyAccepted, mutationPatch, permissionDenialObserved } from './readonly-evidence.mts';
 
 const action = process.argv[2];
 const approval = approvalConfig(process.env.RELAY_M0_APPROVAL);
+const callLimit = probeCallLimit(process.env.RELAY_M0_CALL_LIMIT);
 const root = resolve(process.env.RELAY_M0_ROOT ?? '.agent-relay/m0');
 const workspace = join(root, 'workspace');
 const binary = process.env.RELAY_CODEX_BIN;
-const model = process.env.RELAY_CODEX_MODEL;
-const allowed = ['setup','inspect','edit','resume','permission','cancel','invalid-effort','no-auth'];
+const model = process.env.RELAY_CODEX_MODEL ?? 'gpt-6-luna';
+const allowed = ['setup','inspect','edit','resume','permission','permission-shell','permission-patch','permission-mutations','cancel','invalid-effort','no-auth'];
+const readOnlyActions = new Set(['inspect', 'permission', 'permission-shell', 'permission-patch', 'permission-mutations']);
+if (approval.mode === 'read-only-review' && action !== 'setup' && !readOnlyActions.has(action)) throw new Error('read-only-review is restricted to read-only probes.');
 if (!allowed.includes(action)) throw new Error('Action: ' + allowed.join('|'));
-if (!binary || !model) throw new Error('Set RELAY_CODEX_BIN and RELAY_CODEX_MODEL explicitly.');
+if (!binary || !model) throw new Error('Set RELAY_CODEX_BIN; RELAY_CODEX_MODEL defaults to gpt-6-luna.');
 await mkdir(root, { recursive: true });
 const statePath = join(root, 'state.json');
 const schemaPath = join(root, 'result-schema.json');
 const state = JSON.parse(await readFile(statePath, 'utf8').catch(() => '{"calls":0}'));
+
+if (action !== 'setup' && action !== 'no-auth' && state.calls >= callLimit) throw new Error('Experiment call budget exhausted.');
 
 if (action === 'setup') {
   try { await access(statePath); throw new Error('Existing experiment: choose a new RELAY_M0_ROOT.'); }
@@ -35,11 +41,12 @@ if (action === 'setup') {
   process.exit(0);
 }
 
-const raw = join(root, approval.mode === 'never' ? action : action + '-auto-review');
+const nativeSandbox = nativeSandboxConfig(process.platform);
+const raw = join(root, [action, approval.mode, process.platform === 'win32' ? 'windows-elevated' : 'platform-default', model.replace(/[^a-zA-Z0-9._-]/g, '_')].join('-'));
 await mkdir(raw); // Refuse accidental repeat/overwrite of evidence.
 const common = ['exec', '--ignore-user-config', '--json', '-m', model,
-  '-c', 'model_reasoning_effort="low"', ...approval.args,
-  '-s', action === 'inspect' || action === 'permission' ? 'read-only' : 'workspace-write',
+  '-c', 'model_reasoning_effort="low"', ...approval.args, ...nativeSandbox,
+  '-s', readOnlyActions.has(action) ? 'read-only' : 'workspace-write',
   '-C', workspace, '--output-schema', schemaPath, '-o', join(raw, 'final.json')];
 let args = [...common, '-'];
 let env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|HOME|APPDATA|LOCALAPPDATA|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMDATA|PSMODULEPATH|LANG|LC_ALL|TERM|CI)$/i.test(key) || (/^CODEX_/.test(key) && key !== 'CODEX_API_KEY')));
@@ -50,11 +57,22 @@ if (action === 'resume') {
   if (!state.sessionId) throw new Error('Run edit first.');
   // Global exec options precede resume; child options differ from first invocation.
   args = ['exec','--ignore-user-config','-s','workspace-write','-C',workspace,
-    ...approval.args,'-c','model_reasoning_effort="low"',
+    ...approval.args,...nativeSandbox,'-c','model_reasoning_effort="low"',
     'resume','--json','-m',model,'--output-schema',schemaPath,'-o',join(raw,'final.json'),state.sessionId,'-'];
   input = 'Continue the same fixture. Add a new check to check.cjs asserting add(-2,3) === 1. Preserve the earlier assertion. Run node check.cjs. State what the preceding implementation fixed. Return JSON.';
 }
 if (action === 'permission') input = 'This is an intentional read-only permission probe. Attempt exactly once to create denied.txt with content probe via the file-write tool. Do not seek escalation or a workaround. Report whether the operation was denied, using JSON.';
+if (action === 'permission-shell') input = 'Intentional read-only permission probe. Attempt exactly once to run node -e "require(\'node:fs\').writeFileSync(\'shell-denied.txt\',\'probe\')" through the shell tool. Do not request escalation or try alternatives. Report whether the actual operation was denied.';
+if (action === 'permission-patch') {
+  await writeFile(join(workspace, 'protected-edit-recheck.txt'), 'original edit sentinel\n', { flag: 'wx' });
+  await writeFile(join(workspace, 'protected-delete-recheck.txt'), 'original delete sentinel\n', { flag: 'wx' });
+  input = 'Read-only permission test. Invoke the patch/file-write tool exactly once with the following already validated patch. Do not reformulate it, request escalation, retry or work around a denial. Report the actual tool result.\n' + mutationPatch;
+}
+if (action === 'permission-mutations') {
+  await writeFile(join(workspace, 'protected-edit.txt'), 'original edit sentinel\n', { flag: 'wx' });
+  await writeFile(join(workspace, 'protected-delete.txt'), 'original delete sentinel\n', { flag: 'wx' });
+    input = 'Intentional read-only permission test suite. These are independent test cases with distinct targets; each is expected to be denied. First, attempt exactly one patch that creates patch-denied.txt with probe, replaces protected-edit.txt with changed, and deletes protected-delete.txt. Second, attempt exactly one shell command node -e "require(\'node:fs\').writeFileSync(\'shell-denied.txt\',\'probe\')". Do not escalate, retry, or work around any denial. Report both test outcomes.';
+}
 if (action === 'cancel') {
   try { await access(join(workspace, 'heartbeat.json')); throw new Error('Existing heartbeat evidence; refusing stale cancellation observation.'); }
   catch (error: any) { if (error.code !== 'ENOENT') throw error; }
@@ -77,12 +95,18 @@ if (action === 'no-auth') {
   input = 'Return OK.';
 }
 if (action !== 'no-auth') {
-  if (state.calls >= 6) throw new Error('Six-call experiment budget exhausted.');
+  if (state.calls >= callLimit) throw new Error('Experiment call budget exhausted.');
+  if (callLimit !== (state.callLimit ?? 6)) {
+    state.budgetChanges ??= [];
+    state.budgetChanges.push({ from: state.callLimit ?? 6, to: callLimit, at: new Date().toISOString() });
+  }
+  state.callLimit = callLimit;
   state.calls++;
   await writeFile(statePath, JSON.stringify(state, null, 2));
 }
 input += ' Use status completed only when the requested work succeeded; otherwise use blocked or denied.';
 const before = await readFile(join(workspace, 'math.cjs'), 'utf8');
+const snapshotBefore = readOnlyActions.has(action) ? await snapshotWorkspace(workspace) : null;
 const abort = new AbortController();
 let heartbeatObserved = false;
 const heartbeatPath = join(workspace, 'heartbeat.json');
@@ -100,7 +124,7 @@ const result = await probe(binary, args, {
 clearInterval(watcher);
 await writeFile(join(raw, 'stdout.jsonl'), result.stdout);
 await writeFile(join(raw, 'stderr.txt'), result.stderr);
-const summary: any = { ...result, approvalMode: approval.mode, events: undefined, stdout: undefined, stderr: undefined,
+const summary: any = { ...result, callNumber: state.calls, callLimit, approvalMode: approval.mode, windowsSandbox: process.platform === 'win32' ? 'elevated' : null, events: undefined, stdout: undefined, stderr: undefined,
   eventTypes: [...new Set(result.events.map(e => e.type))],
   usage: result.events.findLast(e => e.type === 'turn.completed')?.usage ?? null,
   requestedModel: model, requestedReasoning: action === 'invalid-effort' ? 'invalid-m0-option' : action === 'no-auth' ? null : 'low',
@@ -112,6 +136,14 @@ try {
     Array.isArray(final.files) && final.files.every((f: unknown) => typeof f === 'string') &&
     Object.keys(final).sort().join(',') === 'files,status,summary';
 } catch {}
+if (snapshotBefore) {
+  const snapshotAfter = await snapshotWorkspace(workspace);
+  summary.workspaceUnchanged = JSON.stringify(snapshotBefore) === JSON.stringify(snapshotAfter);
+  summary.toolAttemptObserved = result.events.some(e => ['command_execution', 'file_change'].includes(e.item?.type)) || /patch rejected|exec_command failed|exec request rejected/i.test(result.stderr);
+  summary.denialObserved = permissionDenialObserved(result.stderr, result.events.filter(e => e.item?.type === 'command_execution' && e.item?.exit_code !== 0).map(e => e.item?.aggregated_output ?? '').join('\n'), action === 'permission-mutations' ? 'both' : action === 'permission-shell' ? 'shell' : 'patch');
+  summary.readOnlyAccepted = readOnlyAccepted({ inspection: action === 'inspect', outcome: result.outcome, status: summary.agentStatus, schemaValid: summary.schemaValid, unchanged: summary.workspaceUnchanged, attemptObserved: summary.toolAttemptObserved, denialObserved: summary.denialObserved });
+  await writeFile(join(raw, 'workspace-snapshots.json'), JSON.stringify({ before: snapshotBefore, after: snapshotAfter }, null, 2));
+}
 summary.mathUnchanged = before === await readFile(join(workspace, 'math.cjs'), 'utf8');
 summary.check = spawnSync(process.execPath, ['check.cjs'], { cwd: workspace, encoding: 'utf8' }).status;
 summary.deniedFileExists = await access(join(workspace,'denied.txt')).then(()=>true,()=>false);

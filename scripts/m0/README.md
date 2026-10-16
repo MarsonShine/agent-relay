@@ -1,13 +1,12 @@
 # M0 实验脚本
 
-运行方法、预算、兼容性与已知限制见 [M0 报告](../../docs/m0/README.md)。
+结果、复现、预算和限制见 [M0 报告](../../docs/m0/README.md)。当前 Windows 基线通过；历史失败保持可查。
 
-- process-probe.mts：观察有界子进程、JSONL 与退出，提供显式取消。
-- process-probe.test.mts：无需模型的生命周期和判定回归测试。
-- codex-probe.mts：在独立 Git 测试目录中执行一次指定的 Codex 场景。
+- process-probe.mts：有界 JSONL/退出观察和外部取消信号。
+- approval-config.mts：显式审批策略、Windows 原生沙箱和有限调用预算。
+- readonly-evidence.mts：夹具快照、固定补丁与基于工具证据的只读判定。
+- codex-probe.mts：每次执行一个指定场景，拒绝覆盖结果。
 
-需要支持原生 .mts 的 Node；本次验证版本是 Node 26.8.2。M1 已提供锁定工具链及 npm run check；此目录仍仅为实验工具。
+真实调用默认 gpt-6-luna；更换模型须由用户明确选择。read-only-review 关闭沙箱/权限扩展审批，Windows 显式保留 elevated 原生沙箱；auto-review 模式仅用于可写流程或诊断，不能作为严格只读保证。默认六次请求，已获额外授权才可通过 RELAY_M0_CALL_LIMIT 增加，上限八次，保留已用次数。
 
-命令输出用于观察证据。脚本完成退出不代表场景通过，须检查 summary 中的 outcome、agentStatus、schemaValid、taskAccepted 和独立检查结果。CLI 完成轮次与任务成功分别记录。
-
-显式设置 RELAY_M0_APPROVAL=auto-review 可复验自动审批通道，默认仍为 never。此模式不忽略任何规则，也不提供已验证的只读能力；当前 CLI 的只读隔离复验失败，禁止据此启用生产后端。取消测试使用有 30 秒自限的心跳夹具，只在真实工具开始写入后发出取消，并复查停止证据。
+运行 `npm run check` 执行不调用模型的检查。实际场景必须核对 readOnlyAccepted、workspaceUnchanged、工具拒绝证据及独立检查，不能凭 CLI 零退出或模型自述判成功。取消探针要求观察真实心跳后再停止，并核对文件不再变化及工具进程退出。
