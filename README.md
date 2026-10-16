@@ -2,7 +2,7 @@
 
 Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它将需求调查、设计、实现、独立审查和反馈修复组织为可恢复、有验收依据的工作流。
 
-**当前状态：规划阶段，尚无可运行产品。** 第一版使用 TypeScript、本地服务与 CLI，通过子进程调用 Codex CLI。自研 API Agent 运行时以及 DeepSeek 等官方 API 接入属于后续 roadmap，不是 v1 前置依赖。
+**当前状态：M0 接入实验部分完成，真实写入链路被执行策略阻塞；尚无可运行产品。** 第一版使用 TypeScript、本地服务与 CLI，通过子进程调用 Codex CLI。自研 API Agent 运行时以及 DeepSeek 等官方 API 接入属于后续 roadmap，不是 v1 前置依赖。
 
 ## 产品边界
 
@@ -17,6 +17,7 @@ Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它�
 
 | 文档 | 用途 |
 | --- | --- |
+| [M0 实验结果](docs/m0/README.md) | 真实接入证据、复现与阻塞项 |
 | [产品规划](docs/product.md) | 范围、用户流程和完成标准 |
 | [架构设计](docs/architecture.md) | 模块、数据、执行接口及可靠性边界 |
 | [工作流](docs/workflow.md) | 状态转移、角色交接与错误处理 |
@@ -48,4 +49,4 @@ agent-relay task cancel <task-id>
 
 ## 许可
 
-仓库计划公开；开源许可证尚待维护者选择。公开可见不代表已授予开源许可。
+仓库已公开；开源许可证尚待维护者选择。公开可见不代表已授予开源许可。

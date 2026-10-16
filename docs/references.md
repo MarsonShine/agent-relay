@@ -19,10 +19,10 @@
 - codex-cli 0.162.0-alpha.17.2。
 - exec 帮助列出 --json、--output-schema、--model、--sandbox、--cd、stdin 输入和 resume。
 - resume 帮助支持显式 SESSION_ID、stdin、--json 和 --output-schema；与首次执行的参数集合不同。
-- GitHub CLI 当前未登录。
+- GitHub 仓库已创建；认证状态以执行时检查为准。
 
 ## 尚未验证
 
-真实模型调用、实际结构化输出、思考配置的有效性、取消后的进程树、恢复行为、CLI 版本兼容、GitHub 权限与远端创建。M0 完成前不得称为已通过。
+2026-10-16 的真实调用、结构化输出、续接及取消证据见 [M0 报告](m0/README.md)。其中真实读写链路仍阻塞；实际模型路由、工具树取消、崩溃恢复与跨平台兼容保持未验证。
 
 DeepSeek 官方 API 的兼容性与工具协议留待 API roadmap 阶段调研和实测，不是 v1 的验收条件。
