@@ -14,7 +14,8 @@
     "format": "prettier --write src test package.json tsconfig*.json .github/workflows/ci.yml",
     "format:check": "prettier --check src test package.json tsconfig*.json .github/workflows/ci.yml",
     "test": "node --test test/*.test.ts scripts/m0/process-probe.test.mts",
-    "check": "npm run typecheck && npm run format:check && npm test && npm run build"
+    "check": "npm run typecheck && npm run format:check && npm test && npm run build",
+    "start": "node dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
@@ -23,5 +24,8 @@
   },
   "dependencies": {
     "zod": "4.6.7"
+  },
+  "bin": {
+    "agent-relay": "dist/cli.js"
   }
 }
