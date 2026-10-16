@@ -121,3 +121,27 @@ test('migration refuses a future database without rewriting it', (t) => {
     sql.close();
   }
 });
+
+test('older task database migrates without losing task and event history', (t) => {
+  const { tasks, db, path } = fixture(t);
+  const task = tasks.create(request());
+  db.sql.exec('DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1');
+  const migrated = new Database(path);
+  try {
+    assert.deepEqual(new Tasks(migrated).get(task.id), task);
+    assert.equal(new Tasks(migrated).events(task.id).length, 1);
+    assert.equal(
+      migrated.sql.prepare('PRAGMA user_version').get()?.user_version,
+      3,
+    );
+    assert.ok(
+      migrated.sql
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE name='one_outstanding_run'",
+        )
+        .get(),
+    );
+  } finally {
+    migrated.close();
+  }
+});
