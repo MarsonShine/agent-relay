@@ -28,4 +28,6 @@ export type WorkspaceLease = {
   runId: string;
   owner: string;
   token: string;
+  revision: string;
+  requirementVersion: number;
 };

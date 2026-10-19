@@ -1,3 +1,5 @@
+import { roleSchema } from '../core/config.ts';
+import type { Profile } from '../core/config.ts';
 import { randomUUID } from 'node:crypto';
 import { runSchema } from '../core/contracts.ts';
 import type { Run, Task } from '../core/contracts.ts';
@@ -29,7 +31,13 @@ export class Runs {
       .all(taskId)
       .map((row) => runSchema.parse(JSON.parse(String(row.document))));
   }
-  claim(taskId: string, executorVersion: string, now = Date.now()): Run | null {
+  claim(
+    taskId: string,
+    executorVersion: string,
+    now = Date.now(),
+    role: Profile['role'] = 'design',
+  ): Run | null {
+    roleSchema.parse(role);
     return this.tasks.db.transaction(() => {
       const task = this.tasks.get(taskId);
       if (task.status !== 'queued' || this.outstanding().length > 0)
@@ -58,7 +66,7 @@ export class Runs {
         id: randomUUID(),
         taskId,
         attempt: task.runsUsed + 1,
-        profile: task.config.profiles.design,
+        profile: task.config.profiles[role],
         executorVersion,
         evidence: {
           requirementVersion: task.requirementVersion,
@@ -85,7 +93,7 @@ export class Runs {
         run.id,
         `claim:${run.id}`,
         'run.claimed',
-        'simulation execution claimed',
+        'execution claimed',
         now,
       );
       return run;
@@ -159,6 +167,7 @@ export class Runs {
         continuation: outcome.continuation,
         outcome: status,
       });
+      this.releaseWorkspace(current);
       const saved = this.tasks.save(task, {
         ...task,
         status,
@@ -176,6 +185,11 @@ export class Runs {
       );
       return saved;
     });
+  }
+  private releaseWorkspace(run: Run): void {
+    this.tasks.db.sql
+      .prepare('DELETE FROM workspace_access WHERE run_id=? AND owner=?')
+      .run(run.id, run.owner);
   }
   quarantine(run: Run, diagnostic: string): void {
     this.tasks.db.transaction(() => {
@@ -224,6 +238,7 @@ export class Runs {
             ? 'paused'
             : 'blocked';
       this.update({ ...run, status: 'stopped', outcome: 'reconciled_stop' });
+      this.releaseWorkspace(run);
       const saved = this.tasks.save(task, {
         ...task,
         status,

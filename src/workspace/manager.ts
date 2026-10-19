@@ -68,6 +68,15 @@ export class Workspaces {
           'conflict',
           'configured workspace root differs from registration',
         );
+      const identity = await this.git.identity(task.repo);
+      if (
+        pathKey(identity.repo) !== pathKey(existing.repo) ||
+        pathKey(identity.commonDir) !== pathKey(existing.commonDir)
+      )
+        throw new RelayError(
+          'conflict',
+          'task repository differs from registration',
+        );
       await this.git.verify(existing, kind !== 'implementation');
       return existing;
     }

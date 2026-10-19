@@ -56,6 +56,12 @@ export const executionRequestSchema = z
       .strictObject({
         path: z.string().min(1),
         kind: z.enum(['repository', 'worktree']),
+        managedId: z.uuid().optional(),
+        revision: z
+          .string()
+          .regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/)
+          .optional(),
+        access: z.enum(['read-only', 'workspace-write']).optional(),
       })
       .optional(),
     run: runSchema,
@@ -71,6 +77,10 @@ export const executionRequestSchema = z
         JSON.stringify(
           request.task.config.profiles[request.run.profile.role],
         ) ||
+      (request.workspace?.revision !== undefined &&
+        request.workspace.revision !== request.run.evidence.codeRevision) ||
+      (request.workspace?.access !== undefined &&
+        request.workspace.access !== request.run.profile.permission) ||
       request.run.taskId !== request.task.id ||
       !evidenceMatches(request.run.evidence) ||
       request.artifacts.some(

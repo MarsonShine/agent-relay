@@ -238,6 +238,8 @@ export class GitWorktrees {
       );
     const changedRules = await this.command(repo, [
       'diff',
+      '--no-ext-diff',
+      '--no-textconv',
       '--name-only',
       revision,
       '--',
