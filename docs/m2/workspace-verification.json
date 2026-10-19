@@ -60,7 +60,16 @@
       "windows-latest",
       "ubuntu-latest"
     ],
-    "evidenceBinding": "CI runs are keyed to the pushed commit. This local record does not assert a remote result."
+    "evidenceBinding": "CI runs are keyed to the pushed commit. This local record does not assert a remote result.",
+    "priorRuns": [
+      {
+        "commit": "91349e545a29b155ac58461d2b94f75055bc7865",
+        "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39194357527",
+        "linux": "passed: 105 tests",
+        "windows": "104 passed, 1 failed, 0 skipped",
+        "cause": "The consultation fixture compared a canonical path with a Windows short-path alias. The assertion now compares realpath(repo), preserving repository identity and no-worktree checks. Production code was unchanged."
+      }
+    ]
   },
   "limitations": [
     "No paid model calls or real target-project acceptance in M2.2.",

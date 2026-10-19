@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
@@ -72,7 +73,7 @@ test('consultation uses the clean repository without creating a branch or worktr
   const { manager, task, repo } = workspaceFixture(t);
   const before = git(repo, 'worktree', 'list', '--porcelain');
   const workspace = await manager.prepare(task.id, 'repository');
-  assert.equal(workspace.path, repo);
+  assert.equal(workspace.path, await realpath(repo));
   assert.equal(workspace.branch, null);
   assert.equal(git(repo, 'worktree', 'list', '--porcelain'), before);
 });
