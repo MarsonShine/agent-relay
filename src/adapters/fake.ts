@@ -32,6 +32,8 @@ export class FakeExecutor implements Executor {
   };
   private readonly processes = new Map<string, ProcessState>();
   async start(request: ExecutionRequest): Promise<ExecutionHandle> {
+    if (request.run.profile.executor !== 'fake')
+      throw new RelayError('invalid', 'fake executor requires a fake profile');
     if (this.processes.has(request.run.id))
       throw new RelayError('conflict', 'run already started in this executor');
     const extension = import.meta.url.endsWith('.ts') ? 'ts' : 'js';

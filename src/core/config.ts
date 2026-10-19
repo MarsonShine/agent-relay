@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { fakeNativeSchema } from '../adapters/fake-config.ts';
+import { codexProfileSchema } from '../adapters/codex/config.ts';
 
 const finiteLimit = (max: number) => z.number().int().positive().max(max);
 export const roleSchema = z.enum(['design', 'implement', 'review']);
-export const profileSchema = z.strictObject({
+export const fakeProfileSchema = z.strictObject({
   role: roleSchema,
   executor: z.literal('fake'),
   provider: z.literal('simulation'),
@@ -12,6 +13,7 @@ export const profileSchema = z.strictObject({
   native: fakeNativeSchema,
   timeoutMs: finiteLimit(3_600_000),
 });
+export const profileSchema = z.union([fakeProfileSchema, codexProfileSchema]);
 export const budgetSchema = z.strictObject({
   maxRuns: finiteLimit(100),
   maxTaskMs: finiteLimit(86_400_000),
@@ -50,8 +52,12 @@ export const configSchema = z
   });
 export type Profile = z.infer<typeof profileSchema>;
 export type Config = z.infer<typeof configSchema>;
-export function defaultConfig(): Config {
-  const profile = (role: Profile['role']): Profile => ({
+type FakeProfile = z.infer<typeof fakeProfileSchema>;
+export type SimulationConfig = Omit<Config, 'profiles'> & {
+  profiles: Record<z.infer<typeof roleSchema>, FakeProfile>;
+};
+export function defaultConfig(): SimulationConfig {
+  const profile = (role: Profile['role']): FakeProfile => ({
     role,
     executor: 'fake',
     provider: 'simulation',
@@ -60,7 +66,12 @@ export function defaultConfig(): Config {
     native: { scenario: 'success', delayMs: 20 },
     timeoutMs: 5_000,
   });
-  return configSchema.parse({
+  const profiles = {
+    design: profile('design'),
+    implement: profile('implement'),
+    review: profile('review'),
+  };
+  const config = configSchema.parse({
     schemaVersion: 1,
     profiles: {
       design: profile('design'),
@@ -72,4 +83,5 @@ export function defaultConfig(): Config {
     maxArtifactBytes: 262_144,
     maxLogBytes: 262_144,
   });
+  return { ...config, profiles };
 }

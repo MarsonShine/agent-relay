@@ -18,7 +18,9 @@ export function fixture(t: TestContext) {
   });
   return { directory, path, db, tasks: new Tasks(db) };
 }
-export function request(): CreateTask {
+export function request(): CreateTask & {
+  config: ReturnType<typeof defaultConfig>;
+} {
   return {
     schemaVersion: 1,
     requestKey: randomUUID(),

@@ -52,6 +52,12 @@ export const executionRequestSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     task: taskSchema,
+    workspace: z
+      .strictObject({
+        path: z.string().min(1),
+        kind: z.enum(['repository', 'worktree']),
+      })
+      .optional(),
     run: runSchema,
     artifacts: z.array(artifactSchema).max(200),
     decisions: z.array(decisionSchema).max(100),
