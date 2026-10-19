@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "requirementVersion": "M2-executor-v1",
+  "date": "2026-10-19",
+  "platform": "Windows",
+  "implementationRevision": "ffcfdfc",
+  "implementationModel": "gpt-6-astra",
+  "requestedTestModel": "gpt-6-luna",
+  "actualRouteIndependentlyVerified": false,
+  "cliVersion": "0.162.0-alpha.17.2",
+  "fixtureBaselineRevision": "1185a9ccd28e8af13d868caed08a8dc76e5b64a0",
+  "foregroundFixtureSha256": "66943d37883c2a869524d0ead6f4d9e0edc0b7aeb19f9e212dbdceeb4fbf47e9",
+  "calls": 4,
+  "initialCallLimit": 3,
+  "explicitlyAuthorizedAdditionalCalls": 1,
+  "perCallTimeoutMs": 180000,
+  "automatedValidation": {
+    "command": "npm run check",
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0
+  },
+  "liveEvidenceScope": "Adapter working tree: final output-schema prompt and foreground cancellation verified. Shared task/profile equality validation was tightened afterward and covered by deterministic tests at implementationRevision.",
+  "scenarios": [
+    {
+      "action": "start",
+      "requestedModel": "gpt-6-luna",
+      "callNumber": 1,
+      "callLimit": 3,
+      "status": "input_required",
+      "stopped": true,
+      "accepted": false,
+      "evidenceMatches": true,
+      "originalCheckoutUnchanged": true,
+      "sentinelPresent": false,
+      "usage": {
+        "inputTokens": 15402,
+        "outputTokens": 96
+      }
+    },
+    {
+      "action": "resume",
+      "requestedModel": "gpt-6-luna",
+      "callNumber": 2,
+      "callLimit": 3,
+      "status": "completed",
+      "stopped": true,
+      "accepted": true,
+      "evidenceMatches": true,
+      "originalCheckoutUnchanged": true,
+      "sentinelPresent": true,
+      "sameBoundContinuation": true,
+      "usage": {
+        "inputTokens": 54353,
+        "outputTokens": 273
+      }
+    },
+    {
+      "action": "cancel",
+      "requestedModel": "gpt-6-luna",
+      "callNumber": 3,
+      "callLimit": 3,
+      "status": "unknown",
+      "stopped": true,
+      "accepted": false,
+      "evidenceMatches": true,
+      "originalCheckoutUnchanged": true,
+      "heartbeatObserved": false,
+      "usage": {
+        "inputTokens": 29584,
+        "outputTokens": 256
+      }
+    },
+    {
+      "action": "cancel-sync",
+      "requestedModel": "gpt-6-luna",
+      "callNumber": 4,
+      "callLimit": 4,
+      "status": "cancelled",
+      "stopped": true,
+      "accepted": true,
+      "evidenceMatches": true,
+      "originalCheckoutUnchanged": true,
+      "heartbeatObserved": true,
+      "heartbeatStopped": true,
+      "toolProcessStopped": true,
+      "usage": null
+    }
+  ],
+  "limitations": [
+    "First role request asked for missing result-format context and was not accepted.",
+    "Initial timer-based cancellation fixture was not launched by the model and was not accepted.",
+    "The successful continuation demonstrates role completion, not whole-task acceptance.",
+    "Real Linux Codex execution, cross-service reconciliation, worktree management and the full M2 development workflow are not validated here."
+  ]
+}
