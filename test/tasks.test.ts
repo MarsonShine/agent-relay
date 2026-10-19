@@ -125,14 +125,16 @@ test('migration refuses a future database without rewriting it', (t) => {
 test('older task database migrates without losing task and event history', (t) => {
   const { tasks, db, path } = fixture(t);
   const task = tasks.create(request());
-  db.sql.exec('DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1');
+  db.sql.exec(
+    'DROP TABLE workspace_access; DROP TABLE workspaces; DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1',
+  );
   const migrated = new Database(path);
   try {
     assert.deepEqual(new Tasks(migrated).get(task.id), task);
     assert.equal(new Tasks(migrated).events(task.id).length, 1);
     assert.equal(
       migrated.sql.prepare('PRAGMA user_version').get()?.user_version,
-      3,
+      4,
     );
     assert.ok(
       migrated.sql

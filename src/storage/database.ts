@@ -27,6 +27,18 @@ const migrations = [
     run_id TEXT NOT NULL REFERENCES runs(id), kind TEXT NOT NULL,
     document TEXT NOT NULL CHECK(json_valid(document)), UNIQUE(run_id, kind)
   ) STRICT;`,
+  `CREATE TABLE workspaces (
+    id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), operation_key TEXT NOT NULL,
+    document TEXT NOT NULL CHECK(json_valid(document)),
+    kind TEXT GENERATED ALWAYS AS (json_extract(document, '$.kind')) VIRTUAL,
+    path TEXT GENERATED ALWAYS AS (json_extract(document, '$.path')) VIRTUAL,
+    UNIQUE(task_id, operation_key)
+  ) STRICT;
+  CREATE UNIQUE INDEX unique_managed_workspace_path ON workspaces(path) WHERE kind!='repository';
+  CREATE TABLE workspace_access (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id), workspace_id TEXT NOT NULL UNIQUE REFERENCES workspaces(id),
+    run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), owner TEXT NOT NULL, token TEXT NOT NULL UNIQUE
+  ) STRICT;`,
 ];
 
 export class Database {
