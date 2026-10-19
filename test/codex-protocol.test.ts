@@ -7,6 +7,7 @@ import {
   invocation,
   prompt,
   finalSchema,
+  finalJsonSchema,
 } from '../src/adapters/codex/protocol.ts';
 import {
   codexEnvironment,
@@ -113,7 +114,9 @@ test('native session reference is bound to task, role, model and canonical works
   assert.ok(
     !invocation(changed, workspace, 'schema.json', 'final.json').includes(text),
   );
-  assert.equal(JSON.parse(prompt(changed).split('\n').at(-1)!).input, text);
+  const body = JSON.parse(prompt(changed).split('\n').at(-1)!);
+  assert.equal(body.input, text);
+  assert.deepEqual(body.resultSchema, finalJsonSchema);
 });
 
 test('role configuration and final output reject unsupported and unknown settings', (t) => {

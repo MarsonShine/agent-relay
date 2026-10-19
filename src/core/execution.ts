@@ -67,6 +67,10 @@ export const executionRequestSchema = z
       evidence.requirementVersion === request.task.requirementVersion &&
       evidence.codeRevision === request.task.codeRevision;
     if (
+      JSON.stringify(request.run.profile) !==
+        JSON.stringify(
+          request.task.config.profiles[request.run.profile.role],
+        ) ||
       request.run.taskId !== request.task.id ||
       !evidenceMatches(request.run.evidence) ||
       request.artifacts.some(
@@ -82,7 +86,8 @@ export const executionRequestSchema = z
     ) {
       context.addIssue({
         code: 'custom',
-        message: 'handoff does not match task and evidence version',
+        message:
+          'handoff does not match task, frozen profile and evidence version',
       });
     }
   });
