@@ -1,3 +1,4 @@
+import { checkLocalPolicies } from './policies.ts';
 import { execFile } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
 import {
@@ -61,6 +62,7 @@ export class GitWorktrees {
     args: string[],
     input = '',
     missingAllowed = false,
+    timeoutMs = 30000,
   ): Promise<string> {
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -77,7 +79,7 @@ export class GitWorktrees {
         {
           env: { ...env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
           windowsHide: true,
-          timeout: 30_000,
+          timeout: timeoutMs,
           maxBuffer: 8 * 1024 * 1024,
           encoding: 'utf8',
         },
@@ -89,7 +91,7 @@ export class GitWorktrees {
             reject(
               new RelayError(
                 'storage',
-                `Git ${args[0]} failed; inspect repository state`,
+                `Git ${args[0]} failed (${error.killed ? 'timeout' : error.code}); inspect repository state`,
               ),
             );
         },
@@ -133,7 +135,11 @@ export class GitWorktrees {
       ...(ignored ? ['--ignored'] : []),
     ]);
   }
-  async preflight(repo: string, revision: string): Promise<void> {
+  async preflight(
+    repo: string,
+    revision: string,
+    futureFiles: readonly string[] = [],
+  ): Promise<void> {
     commitSchema.parse(revision);
     if (
       (
@@ -165,9 +171,26 @@ export class GitWorktrees {
         'invalid',
         'post-checkout hook requires a trusted integration',
       );
-    if (
+    const fsmonitor = (
       await this.command(repo, ['config', '--get', 'core.fsmonitor'], '', true)
-    )
+    ).trim();
+    const builtinMonitor = /^(true|yes|on|1)$/i.test(fsmonitor);
+    if (builtinMonitor) {
+      const version = (await this.command(repo, ['version'])).match(
+        /git version (\d+)\.(\d+)/,
+      );
+      if (
+        process.platform !== 'win32' ||
+        !version ||
+        Number(version[1]) < 2 ||
+        (Number(version[1]) === 2 && Number(version[2]) < 36)
+      )
+        throw new RelayError(
+          'invalid',
+          'built-in fsmonitor requires supported native Windows Git',
+        );
+    }
+    if (fsmonitor && !builtinMonitor && !/^(false|no|off|0)$/i.test(fsmonitor))
       throw new RelayError(
         'invalid',
         'Git fsmonitor requires a trusted integration',
@@ -245,15 +268,8 @@ export class GitWorktrees {
       '--',
       ...policyPaths,
     ]);
-    const localRules = await this.command(repo, [
-      'status',
-      '--porcelain=v1',
-      '--untracked-files=all',
-      '--ignored',
-      '--',
-      ...policyPaths,
-    ]);
-    if (changedRules || localRules)
+    await checkLocalPolicies(repo, names, futureFiles);
+    if (changedRules)
       throw new RelayError(
         'conflict',
         'repository instructions are not reproducible at this revision',
@@ -283,11 +299,13 @@ export class GitWorktrees {
     ];
     if (workspace.branch) args.push('-b', workspace.branch);
     else args.push('--detach');
-    await this.command(workspace.repo, [
-      ...args,
-      workspace.path,
-      workspace.revision,
-    ]);
+    await this.command(
+      workspace.repo,
+      [...args, workspace.path, workspace.revision],
+      '',
+      false,
+      120000,
+    );
   }
   async verify(workspace: Workspace, clean: boolean): Promise<string> {
     if (pathKey(await realpath(workspace.path)) !== pathKey(workspace.path))

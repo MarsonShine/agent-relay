@@ -81,7 +81,11 @@ export class Workspaces {
       return existing;
     }
     const identity = await this.git.identity(task.repo);
-    await this.git.preflight(identity.repo, task.codeRevision);
+    await this.git.preflight(
+      identity.repo,
+      task.codeRevision,
+      task.config.allowedFiles,
+    );
     const targetRoot = await destination(this.root);
     if (
       inside(identity.repo, targetRoot) ||
@@ -138,7 +142,7 @@ export class Workspaces {
       root,
       path: kind === 'repository' ? identity.repo : join(root, id),
       contentHash: null,
-      branch: kind === 'implementation' ? `codex/task-${taskId}` : null,
+      branch: kind === 'implementation' ? `codex/task-${taskId}/work` : null,
       baselineRevision: implementation?.baselineRevision ?? task.codeRevision,
       revision: task.codeRevision,
       requirementVersion: task.requirementVersion,
@@ -186,6 +190,57 @@ export class Workspaces {
     return this.tasks.db.transaction(() =>
       this.save({ ...workspace, state: 'ready', contentHash }),
     );
+  }
+  /** Explicit acknowledgement of a completed creation; never replays Git or accepts dirty state. */
+  async confirmCreated(id: string): Promise<Workspace> {
+    const workspace = this.get(id),
+      task = this.tasks.get(workspace.taskId);
+    const unoccupied = () =>
+      !this.tasks.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(task.id) &&
+      !this.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id);
+    if (
+      workspace.state !== 'creating' ||
+      !unoccupied() ||
+      task.codeRevision !== workspace.revision ||
+      task.requirementVersion !== workspace.requirementVersion
+    )
+      throw new RelayError(
+        'conflict',
+        'creation cannot be confirmed while execution or evidence is uncertain',
+      );
+    if (
+      pathKey(await destination(this.root)) !== pathKey(workspace.root) ||
+      (await this.git.verify(workspace, true)) !== workspace.revision
+    )
+      throw new RelayError(
+        'conflict',
+        'creation does not match its recorded baseline',
+      );
+    const contentHash =
+      workspace.kind === 'review' ? await contentDigest(workspace.path) : null;
+    return this.tasks.db.transaction(() => {
+      if (
+        this.get(id).state !== 'creating' ||
+        this.tasks.get(task.id).version !== task.version ||
+        !unoccupied()
+      )
+        throw new RelayError(
+          'conflict',
+          'creation changed during confirmation',
+        );
+      this.tasks.append(
+        task.id,
+        null,
+        `workspace-confirm:${id}`,
+        'workspace.confirmed',
+        workspace.revision,
+      );
+      return this.save({ ...workspace, state: 'ready', contentHash });
+    });
   }
   async inspect(
     id: string,

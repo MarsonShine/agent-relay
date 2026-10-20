@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { Database } from '../src/storage/database.ts';
+import { Runs } from '../src/storage/runs.ts';
 import { Tasks } from '../src/storage/tasks.ts';
 import { Workspaces } from '../src/workspace/manager.ts';
 import { GitWorktrees } from '../src/workspace/git.ts';
@@ -121,6 +122,16 @@ test('successful Git creation followed by failure remains pending and is never r
     /not be replayed/,
   );
   assert.equal((await interrupted.git.listed(repo)).length, 2);
+  writeFileSync(join(workspace.path, 'value.txt'), 'unconfirmed edits\n');
+  await assert.rejects(interrupted.confirmCreated(workspace.id), /dirty/);
+  writeFileSync(join(workspace.path, 'value.txt'), 'baseline\n');
+  const runs = new Runs(tasks),
+    run = runs.claim(task.id, 'fixture')!;
+  await assert.rejects(interrupted.confirmCreated(workspace.id), /uncertain/);
+  runs.quarantine(run, 'fixture unknown stop');
+  await assert.rejects(interrupted.confirmCreated(workspace.id), /uncertain/);
+  runs.confirmStopped(run.id);
+  assert.equal((await interrupted.confirmCreated(workspace.id)).state, 'ready');
 });
 
 test('cleanup refuses dirty files, requires terminal state and retains branch history', async (t) => {
@@ -206,7 +217,7 @@ test('dirty filter attributes and pre-existing branches cannot bypass checkout a
   );
   assert.equal(first.manager.list(first.task.id).length, 0);
   const second = workspaceFixture(t);
-  const branch = `codex/task-${second.task.id}`;
+  const branch = `codex/task-${second.task.id}/work`;
   git(second.repo, 'branch', branch);
   await assert.rejects(
     second.manager.prepare(second.task.id, 'implementation'),
@@ -214,4 +225,42 @@ test('dirty filter attributes and pre-existing branches cannot bypass checkout a
   );
   assert.equal(git(second.repo, 'rev-parse', branch), second.revision);
   assert.equal((await second.manager.git.listed(second.repo)).length, 1);
+});
+
+test('disabled fsmonitor boolean values do not require an executable integration', async (t) => {
+  const f = workspaceFixture(t);
+  git(f.repo, 'config', 'core.fsmonitor', 'false');
+  assert.equal(
+    (await f.manager.prepare(f.task.id, 'repository')).kind,
+    'repository',
+  );
+  git(f.repo, 'config', 'core.fsmonitor', 'true');
+  if (process.platform === 'win32') {
+    await f.manager.git.preflight(f.repo, f.revision);
+    git(f.repo, 'fsmonitor--daemon', 'stop');
+  } else
+    await assert.rejects(
+      f.manager.git.preflight(f.repo, f.revision),
+      /fsmonitor/,
+    );
+  git(f.repo, 'config', 'core.fsmonitor', 'untrusted-monitor-script');
+  await assert.rejects(
+    f.manager.git.preflight(f.repo, f.revision),
+    /fsmonitor/,
+  );
+});
+
+test('authorized new-file ancestors preserve ignored local policy and reject path traversal', async (t) => {
+  const f = workspaceFixture(t);
+  mkdirSync(join(f.repo, 'new'));
+  writeFileSync(join(f.repo, 'new', 'AGENTS.md'), 'local rules\n');
+  writeFileSync(join(f.repo, '.gitignore'), 'new/\n');
+  await assert.rejects(
+    f.manager.git.preflight(f.repo, f.revision, ['new/file.cs']),
+    /not reproducible/,
+  );
+  await assert.rejects(
+    f.manager.git.preflight(f.repo, f.revision, ['../outside.cs']),
+    /repository-relative/,
+  );
 });
