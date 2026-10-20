@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "requirementVersions": [
+    "M2-handoff-v1",
+    "M2-verification-v1",
+    "M2-feedback-v1",
+    "M2-runtime-v1"
+  ],
+  "codeRevision": "15f865b44b7249981557c71063c47065e60ce239",
+  "date": "2026-10-20",
+  "implementationStatus": {
+    "m23": "implemented",
+    "m24": "implemented",
+    "m25": "implemented",
+    "m26": "not accepted; waiting for explicit deadline extension and final application validation/review"
+  },
+  "localChecks": {
+    "command": "npm run check",
+    "passed": 122,
+    "failed": 0,
+    "skipped": 0
+  },
+  "runtime": {
+    "codexVersion": "0.163.0-alpha.10.2",
+    "model": "gpt-6-luna",
+    "platform": "win32",
+    "modelCallLimit": 10,
+    "modelCallsUsed": 8,
+    "perCallTimeoutMs": 180000,
+    "checks": [
+      {
+        "call": 1,
+        "kind": "legal read and protected control-directory read",
+        "outcome": "verified",
+        "workspaceUnchanged": true,
+        "note": "The generic denial detector did not match the PowerShell wording; direct native sandbox assertions and the actual failed Get-Content permission output were independently inspected."
+      },
+      {
+        "call": 2,
+        "kind": "fixed valid patch in read-only workspace",
+        "outcome": "permission denied",
+        "workspaceUnchanged": true
+      },
+      {
+        "call": 3,
+        "kind": "shell write in read-only workspace",
+        "outcome": "permission denied",
+        "workspaceUnchanged": true
+      },
+      {
+        "call": 4,
+        "kind": "cancel foreground heartbeat",
+        "outcome": "verified",
+        "activityObserved": true,
+        "heartbeatStopped": true,
+        "toolExited": true,
+        "sourceUnchanged": true
+      },
+      {
+        "call": 5,
+        "kind": "pilot triage",
+        "outcome": "rejected",
+        "reason": "Wrong stage and invalid nested JSON escaping. Replaced union/string guidance with current-stage native object schema."
+      },
+      {
+        "call": 6,
+        "kind": "pilot triage",
+        "outcome": "accepted handoff"
+      },
+      {
+        "call": 7,
+        "kind": "pilot implementation",
+        "outcome": "deadline cancellation confirmed",
+        "reason": "Scoped test edits existed but no commit was produced; no result was accepted."
+      },
+      {
+        "call": 8,
+        "kind": "pilot implementation",
+        "outcome": "candidate produced, handoff rejected",
+        "reason": "Commit existed but temporary test artifacts remained untracked and were reported unresolved. Artifacts were retained outside the code worktree; unresolved claims remain pending independent review."
+      }
+    ],
+    "nativeChecks": {
+      "legalRead": true,
+      "protectedDirectoryReadDenied": true,
+      "readOnlyWriteDenied": true,
+      "scopedTaskCommit": true,
+      "globalPackedRefsMaintenanceDenied": true
+    }
+  },
+  "pilot": {
+    "project": "MS.Microservice",
+    "baselineRevision": "c05efd18edf9ee40abfeb4b642162dec3cd89edd",
+    "candidateRevision": "2b811fe9e29843b43380b1d5cc863decfc527524",
+    "scope": [
+      "test/MS.Microservice.Core.Tests/Text/TextNormalizerTests.cs"
+    ],
+    "baselineTests": {
+      "passed": 1065,
+      "failed": 0,
+      "skipped": 0
+    },
+    "candidateIndependentTests": {
+      "passed": 1069,
+      "failed": 0,
+      "skipped": 0
+    },
+    "applicationAccepted": false,
+    "runsConsumed": 5,
+    "iterationsConsumed": 0,
+    "modelCallsConsumed": 4,
+    "published": false,
+    "merged": false,
+    "budgetState": "Original one-hour task deadline expired during investigation. No automatic extension or counter reset. Two authorized model calls remain; explicit extension requested."
+  },
+  "limitations": [
+    "Final application-owned validation and independent resolution of prior unresolved claims are still required.",
+    "Native development service remains disabled outside Windows; Linux CI does not certify live Codex permissions.",
+    "Live continuation on the new CLI version was not rerun; deterministic continuation checks pass, and the prior live evidence is version-bound to the earlier CLI.",
+    "Windows elevated requires baseline root read; explicit denies protect controller/credential locations, not every possible host secret.",
+    "Unknown process identities and automatic cross-service side-effect recovery remain M3 work."
+  ],
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "platforms": [
+      "windows-latest",
+      "ubuntu-latest"
+    ],
+    "result": "pending pushed-head verification"
+  }
+}
