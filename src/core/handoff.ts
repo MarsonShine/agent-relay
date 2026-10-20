@@ -19,6 +19,25 @@ const source = z.strictObject({
   line: z.number().int().positive(),
   excerpt: text,
 });
+const responses = z
+  .array(
+    z.strictObject({
+      findingId: z.string().min(1).max(64),
+      disposition: z.enum(['addressed', 'disputed']),
+      proof: text,
+    }),
+  )
+  .max(50)
+  .default([]);
+const resolutions = z
+  .array(
+    z.strictObject({
+      findingId: z.string().min(1).max(64),
+      verification: text,
+    }),
+  )
+  .max(50)
+  .default([]);
 export const handoffSchema = z.discriminatedUnion('stage', [
   z.strictObject({
     stage: z.literal('triage'),
@@ -34,6 +53,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
   }),
   z.strictObject({
     stage: z.literal('design'),
+    responses,
     summary: text,
     evidence: z.array(source).min(1).max(30),
     rootCause: text,
@@ -44,6 +64,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
   }),
   z.strictObject({
     stage: z.literal('implement'),
+    responses,
     summary: text,
     baseRevision: sha,
     resultRevision: sha,
@@ -53,6 +74,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
   z.strictObject({
     stage: z.enum(['design_review', 'code_review']),
     subjectRunId: z.uuid(),
+    resolutions,
     verdict: z.enum(['approve', 'revise']),
     coverage: z
       .array(z.strictObject({ criterionId: text, proof: text }))
@@ -91,6 +113,23 @@ export const handoffContextSchema = z.strictObject({
   contractVersion: z.literal('M2-handoff-v1'),
   resultSchema: z.record(z.string(), z.unknown()),
   history: z.array(handoffRecordSchema).max(100),
+  validations: z
+    .array(
+      z.strictObject({
+        evidence: evidenceSchema,
+        status: z.enum(['passed', 'failed', 'unknown']),
+        checks: z.array(
+          z.strictObject({
+            id: z.string(),
+            exitCode: z.number().nullable(),
+            reason: z.string().nullable(),
+            log: z.string(),
+          }),
+        ),
+      }),
+    )
+    .max(100)
+    .optional(),
 });
 
 export type Advance = {

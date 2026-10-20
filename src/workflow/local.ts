@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Verifier } from '../verification/runner.ts';
+import { digest, Verifier } from '../verification/runner.ts';
 import type { Profile } from '../core/config.ts';
 import type { Run, Task } from '../core/contracts.ts';
 import { handoffSchema, handoffRecordSchema } from '../core/handoff.ts';
@@ -59,6 +59,21 @@ export class LocalWorkflow {
       contractVersion: 'M2-handoff-v1' as const,
       resultSchema: z.toJSONSchema(handoffSchema, { target: 'draft-7' }),
       history: this.history(task),
+      validations: this.verifier
+        .reports(task)
+        .filter(
+          (v) => v.evidence.requirementVersion === task.requirementVersion,
+        )
+        .map((v) => ({
+          evidence: v.evidence,
+          status: v.status,
+          checks: v.checks.map((c) => ({
+            id: c.id,
+            exitCode: c.exitCode,
+            reason: c.reason,
+            log: c.log,
+          })),
+        })),
     };
     if (Buffer.byteLength(JSON.stringify(result)) > 1024 * 1024)
       throw new RelayError('invalid', 'handoff context limit exceeded');
@@ -76,6 +91,49 @@ export class LocalWorkflow {
     let stage: Task['stage'] = task.stage,
       codeRevision = task.codeRevision;
     let status: Advance['status'] = 'queued';
+    let iterationsUsed = task.iterationsUsed,
+      diagnostic: string | null = null;
+    const retry = (target: Task['stage'], reason: string) => {
+      diagnostic = reason;
+      if (iterationsUsed >= task.config.budget.maxIterations) {
+        status = 'blocked';
+        diagnostic += '; iteration budget exhausted';
+      } else {
+        iterationsUsed++;
+        stage = target;
+      }
+    };
+    const unresolved = new Map<string, string>();
+    for (const entry of history) {
+      const review = entry.result;
+      if (review.stage !== 'design_review' && review.stage !== 'code_review')
+        continue;
+      for (const resolution of review.resolutions)
+        unresolved.delete(resolution.findingId);
+      for (const finding of review.findings)
+        if (finding.severity === 'blocking')
+          unresolved.set(finding.id, finding.origin);
+    }
+    if (result.stage === 'implement' || result.stage === 'design') {
+      const relevant = [...unresolved]
+        .filter(
+          ([, origin]) => result.stage === 'implement' || origin === 'design',
+        )
+        .map(([id]) => id);
+      if (
+        relevant.some((id) => !result.responses.some((r) => r.findingId === id))
+      )
+        throw new RelayError(
+          'conflict',
+          'repair must address or dispute every outstanding finding with evidence',
+        );
+      if (
+        result.stage === 'design' &&
+        latest('design') !== undefined &&
+        digest(result) === digest(latest('design')?.result)
+      )
+        throw new RelayError('conflict', 'design feedback made no progress');
+    }
     const triage = latest('triage')?.result;
     if (result.stage !== 'triage' && triage?.stage !== 'triage')
       throw new RelayError('conflict', 'current requirement has no triage');
@@ -88,6 +146,14 @@ export class LocalWorkflow {
         throw new RelayError(
           'invalid',
           'triage requires unique criteria and bounded change scope',
+        );
+      if (
+        task.config.allowedFiles &&
+        result.scope.some((p) => !task.config.allowedFiles!.includes(p))
+      )
+        throw new RelayError(
+          'conflict',
+          'triage scope exceeds trusted allowed files',
         );
       stage =
         result.kind === 'consultation'
@@ -158,13 +224,11 @@ export class LocalWorkflow {
         workspace,
         result.resultRevision,
       );
-      if (validation.status !== 'passed')
-        throw new RelayError(
-          'conflict',
-          'trusted verification failed or stop is unknown',
-        );
+      if (!validation.stopped)
+        throw new RelayError('conflict', 'verification stop is unknown');
       codeRevision = result.resultRevision;
-      stage = 'code_review';
+      if (validation.status === 'passed') stage = 'code_review';
+      else retry('implement', 'trusted verification failed');
     } else {
       const subject = latest(
         result.stage === 'design_review' ? 'design' : 'implement',
@@ -186,30 +250,67 @@ export class LocalWorkflow {
       )
         throw new RelayError('invalid', 'duplicate finding identifiers');
       if (
-        result.verdict !== 'approve' ||
-        result.findings.some((f) => f.severity === 'blocking')
+        result.resolutions.some((r) => !unresolved.has(r.findingId)) ||
+        new Set(result.resolutions.map((r) => r.findingId)).size !==
+          result.resolutions.length
       )
         throw new RelayError(
           'conflict',
-          'blocking feedback requires bounded repair',
+          'review resolutions require unique outstanding finding IDs',
+        );
+      for (const resolution of result.resolutions)
+        unresolved.delete(resolution.findingId);
+      for (const finding of result.findings)
+        if (finding.severity === 'blocking')
+          unresolved.set(finding.id, finding.origin);
+      const needsRepair = result.verdict === 'revise' || unresolved.size > 0;
+      if (
+        result.verdict === 'revise' &&
+        result.findings.length === 0 &&
+        unresolved.size === 0
+      )
+        throw new RelayError(
+          'invalid',
+          'revision requires actionable findings',
         );
       const criteria =
         triage?.stage === 'triage'
           ? triage.acceptance.map((c) => c.id).sort()
           : [];
       if (
+        !needsRepair &&
         JSON.stringify(result.coverage.map((c) => c.criterionId).sort()) !==
-        JSON.stringify(criteria)
+          JSON.stringify(criteria)
       )
         throw new RelayError(
           'conflict',
           'review must cover every acceptance criterion exactly once',
         );
-      if (result.stage === 'code_review') {
+      if (needsRepair) {
+        retry(
+          result.stage === 'design_review' ||
+            [...unresolved.values()].includes('design')
+            ? 'design'
+            : 'implement',
+          'review requires evidence-backed repair',
+        );
+      } else if (result.stage === 'code_review') {
         if (!this.verifier.accepted(task))
           throw new RelayError(
             'conflict',
             'trusted verification is required before local delivery',
+          );
+        const implementation = this.workspaces
+          .list(task.id)
+          .find((w) => w.kind === 'implementation');
+        if (
+          !implementation ||
+          (await this.workspaces.git.verify(implementation, true)) !==
+            task.codeRevision
+        )
+          throw new RelayError(
+            'conflict',
+            'implementation changed during review',
           );
         stage = 'deliver';
         status = 'succeeded';
@@ -226,8 +327,8 @@ export class LocalWorkflow {
       status,
       stage,
       codeRevision,
-      iterationsUsed: task.iterationsUsed,
-      diagnostic: null,
+      iterationsUsed,
+      diagnostic,
       persist: () => {
         const current = this.workspaces.tasks.get(task.id);
         if (

@@ -24,6 +24,11 @@ export const configSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     verification: verificationPolicySchema.optional(),
+    allowedFiles: z
+      .array(z.string().min(1).max(1024))
+      .min(1)
+      .max(100)
+      .optional(),
     profiles: z.strictObject({
       design: profileSchema,
       implement: profileSchema,

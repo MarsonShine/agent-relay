@@ -134,6 +134,7 @@ test('design approval must bind the candidate and cover every criterion before i
     if (r.task.stage === 'design')
       return {
         stage: 'design',
+        responses: [],
         summary: 'change value',
         evidence: [{ path: 'value.txt', line: 1, excerpt: 'baseline' }],
         rootCause: 'fixture behavior',
@@ -144,6 +145,7 @@ test('design approval must bind the candidate and cover every criterion before i
       };
     return {
       stage: 'design_review',
+      resolutions: [],
       subjectRunId: r.handoff!.history.at(-1)!.runId,
       verdict: 'approve',
       coverage: [],
@@ -155,4 +157,137 @@ test('design approval must bind the candidate and cover every criterion before i
   assert.equal((await f.step()).status, 'blocked');
   assert.equal(f.backend.calls[2]!.run.profile.role, 'review');
   assert.equal(f.tasks.get(f.task.id).stage, 'design_review');
+});
+
+test('design feedback shares an iteration budget and requires independent resolution evidence', async (t) => {
+  const f = setup(t);
+  let designs = 0,
+    reviews = 0;
+  f.backend.output = (r) => {
+    if (r.task.stage === 'triage')
+      return { ...triage, kind: 'change', scope: ['value.txt'] };
+    if (r.task.stage === 'design') {
+      designs++;
+      return {
+        stage: 'design',
+        summary: `design ${designs}`,
+        evidence: [{ path: 'value.txt', line: 1, excerpt: 'baseline' }],
+        rootCause: 'fixture contract',
+        invariant: 'empty values rejected',
+        fixLayer: 'shared parser',
+        steps: [
+          designs === 1
+            ? 'update value'
+            : 'validate empty input before storing',
+        ],
+        validationPlan: ['check empty values'],
+        responses:
+          designs === 1
+            ? []
+            : [
+                {
+                  findingId: 'F1',
+                  disposition: 'addressed',
+                  proof: 'empty input validation added to shared parser plan',
+                },
+              ],
+      };
+    }
+    reviews++;
+    return {
+      stage: 'design_review',
+      subjectRunId: r.handoff!.history.findLast(
+        (h) => h.result.stage === 'design',
+      )!.runId,
+      verdict: reviews === 1 ? 'revise' : 'approve',
+      coverage: [{ criterionId: 'A1', proof: 'verified current plan' }],
+      findings:
+        reviews === 1
+          ? [
+              {
+                id: 'F1',
+                severity: 'blocking',
+                origin: 'design',
+                location: 'shared parser',
+                trigger: 'empty input',
+                proof: 'first plan has no validation step',
+                impact: 'invalid value stored',
+              },
+            ]
+          : [],
+      resolutions:
+        reviews === 1
+          ? []
+          : [
+              {
+                findingId: 'F1',
+                verification:
+                  'latest plan validates empty input before storage',
+              },
+            ],
+    };
+  };
+  await f.step();
+  await f.step();
+  assert.equal((await f.step()).stage, 'design');
+  assert.equal(f.tasks.get(f.task.id).iterationsUsed, 1);
+  await f.step();
+  assert.equal((await f.step()).stage, 'implement');
+  const history = f.workflow.history(f.tasks.get(f.task.id));
+  assert.equal(history.length, 5);
+  assert.equal(history.at(-1)!.result.stage, 'design_review');
+});
+test('exhausted repair budget preserves feedback but does not schedule another model run', async (t) => {
+  const f = setup(t),
+    task = f.tasks.get(f.task.id);
+  f.db.transaction(() =>
+    f.tasks.save(task, {
+      ...task,
+      config: {
+        ...task.config,
+        budget: { ...task.config.budget, maxIterations: 0 },
+      },
+    }),
+  );
+  f.backend.output = (r) =>
+    r.task.stage === 'triage'
+      ? { ...triage, kind: 'change', scope: ['value.txt'] }
+      : r.task.stage === 'design'
+        ? {
+            stage: 'design',
+            responses: [],
+            summary: 'design',
+            evidence: [{ path: 'value.txt', line: 1, excerpt: 'baseline' }],
+            rootCause: 'contract gap',
+            invariant: 'validated data',
+            fixLayer: 'parser',
+            steps: ['fix parser'],
+            validationPlan: ['test parser'],
+          }
+        : {
+            stage: 'design_review',
+            subjectRunId: r.handoff!.history.at(-1)!.runId,
+            verdict: 'revise',
+            coverage: [],
+            resolutions: [],
+            findings: [
+              {
+                id: 'F1',
+                severity: 'blocking',
+                origin: 'design',
+                location: 'parser',
+                trigger: 'invalid data',
+                proof: 'missing validation',
+                impact: 'invalid state',
+              },
+            ],
+          };
+  await f.step();
+  await f.step();
+  const blocked = await f.step();
+  assert.equal(blocked.status, 'blocked');
+  assert.match(blocked.diagnostic!, /budget exhausted/);
+  await f.step();
+  assert.equal(f.backend.calls.length, 3);
+  assert.equal(f.workflow.history(blocked).length, 3);
 });
