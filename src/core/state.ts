@@ -5,6 +5,7 @@ export const terminal = new Set<Status>(['succeeded', 'failed', 'cancelled']);
 const transitions: Record<Status, readonly Status[]> = {
   queued: ['running', 'paused', 'cancelled', 'blocked'],
   running: [
+    'queued',
     'waiting_user',
     'recovering',
     'succeeded',

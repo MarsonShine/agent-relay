@@ -1,5 +1,6 @@
 import { roleSchema } from '../core/config.ts';
 import type { Profile } from '../core/config.ts';
+import type { Advance } from '../core/handoff.ts';
 import { randomUUID } from 'node:crypto';
 import { runSchema } from '../core/contracts.ts';
 import type { Run, Task } from '../core/contracts.ts';
@@ -145,12 +146,13 @@ export class Runs {
   finish(
     run: Run,
     outcome: {
-      status: 'succeeded' | 'failed' | 'waiting_user' | 'blocked';
+      status: 'succeeded' | 'failed' | 'waiting_user' | 'blocked' | 'queued';
       diagnostic: string | null;
       question: Task['question'];
       continuation: string | null;
     },
     now = Date.now(),
+    advance?: Advance,
   ): Task {
     return this.tasks.db.transaction(() => {
       const current = this.owned(run, now);
@@ -167,10 +169,18 @@ export class Runs {
         continuation: outcome.continuation,
         outcome: status,
       });
+      if (!task.control) advance?.persist();
       this.releaseWorkspace(current);
       const saved = this.tasks.save(task, {
         ...task,
         status,
+        ...(!task.control && advance
+          ? {
+              stage: advance.stage,
+              codeRevision: advance.codeRevision,
+              iterationsUsed: advance.iterationsUsed,
+            }
+          : {}),
         control: null,
         diagnostic: outcome.diagnostic,
         question: status === 'waiting_user' ? outcome.question : null,

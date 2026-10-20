@@ -42,7 +42,7 @@ export const questionSchema = z.strictObject({
 export const taskSchema = z.strictObject({
   ...envelope,
   id: idSchema,
-  kind: z.literal('simulation'),
+  kind: z.enum(['simulation', 'development']),
   repo: z.string().min(1),
   input: z.string().min(1).max(32_768),
   requirementVersion: versionSchema,
@@ -128,6 +128,7 @@ export const decisionSchema = z.strictObject({
 });
 export type Decision = z.infer<typeof decisionSchema>;
 export const createTaskSchema = z.strictObject({
+  kind: z.enum(['simulation', 'development']).optional(),
   schemaVersion: z.literal(1),
   requestKey: z.string().min(1).max(128),
   repo: z.string().min(1),

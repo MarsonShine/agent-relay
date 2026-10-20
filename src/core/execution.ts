@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { handoffContextSchema } from './handoff.ts';
 import {
   evidenceSchema,
   questionSchema,
@@ -52,6 +53,7 @@ export const executionRequestSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     task: taskSchema,
+    handoff: handoffContextSchema.optional(),
     workspace: z
       .strictObject({
         path: z.string().min(1),

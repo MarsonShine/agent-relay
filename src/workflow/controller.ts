@@ -5,6 +5,8 @@ import {
 } from '../core/execution.ts';
 import type { ExecutionResult, Executor } from '../core/execution.ts';
 import type { Run, Task } from '../core/contracts.ts';
+import type { LocalWorkflow } from './local.ts';
+import type { Advance } from '../core/handoff.ts';
 import { RelayError } from '../core/errors.ts';
 import { BoundedLog } from '../storage/evidence.ts';
 import type { Evidence } from '../storage/evidence.ts';
@@ -34,15 +36,22 @@ export class Controller {
   readonly runs: Runs;
   readonly evidence: Evidence;
   readonly executor: Executor;
+  readonly workflow: LocalWorkflow | undefined;
   private active: Active | null = null;
   private ticking = false;
   private closing = false;
   private failure: unknown = null;
-  constructor(tasks: Tasks, evidence: Evidence, executor: Executor) {
+  constructor(
+    tasks: Tasks,
+    evidence: Evidence,
+    executor: Executor,
+    workflow?: LocalWorkflow,
+  ) {
     this.tasks = tasks;
     this.runs = new Runs(tasks);
     this.evidence = evidence;
     this.executor = executor;
+    this.workflow = workflow;
   }
   async tick(): Promise<void> {
     if (this.failure !== null) throw this.failure;
@@ -71,8 +80,11 @@ export class Controller {
       }
       const task = this.tasks.list('queued')[0];
       if (!task) return;
-      const profile = task.config.profiles.design;
+      const role =
+        task.kind === 'development' ? this.workflow?.role(task) : 'design';
+      const profile = task.config.profiles[role ?? 'design'];
       if (
+        !role ||
         profile.executor !== this.executor.id ||
         !this.executor.capabilities.permissions.includes(profile.permission) ||
         !this.executor.capabilities.structuredOutput ||
@@ -96,7 +108,12 @@ export class Controller {
         });
         return;
       }
-      const run = this.runs.claim(task.id, this.executor.version);
+      const run = this.runs.claim(
+        task.id,
+        this.executor.version,
+        Date.now(),
+        role,
+      );
       if (!run) return;
       let stop!: (reason: string) => void;
       const stopping = new Promise<string>((resolve) => {
@@ -156,11 +173,15 @@ export class Controller {
       Math.floor(task.config.leaseMs / 3),
     );
     const terminalEvents = new Set<string>();
+    let advance: Advance | undefined;
     const processResult = async (): Promise<ExecutionResult> => {
       const request = executionRequestSchema.parse({
         schemaVersion: 1,
         task,
         run,
+        ...(task.kind === 'development'
+          ? { handoff: this.workflow!.context(task) }
+          : {}),
         decisions: this.tasks.decisions(task.id),
         artifacts: this.evidence
           .list(task.id)
@@ -189,7 +210,22 @@ export class Controller {
         }
       };
       const [, result] = await Promise.all([consume(), handle.result]);
-      return resultSchema.parse(result);
+      const checked = resultSchema.parse(result);
+      if (
+        !detached &&
+        task.kind === 'development' &&
+        checked.stopped &&
+        this.accept(task, checked, terminalEvents).status === 'succeeded'
+      ) {
+        const artifact = this.evidence.put(
+          run,
+          'result',
+          checked.output!,
+          task.config.maxArtifactBytes,
+        );
+        advance = await this.workflow!.complete(task, run, artifact.id);
+      }
+      return checked;
     };
     try {
       const winner = await Promise.race([processResult(), stopping, deadline]);
@@ -217,7 +253,18 @@ export class Controller {
         );
         this.evidence.read(artifact.id);
       }
-      this.runs.finish(run, { ...outcome, continuation: winner.continuation });
+      this.runs.finish(
+        run,
+        {
+          ...outcome,
+          ...(advance
+            ? { status: advance.status, diagnostic: advance.diagnostic }
+            : {}),
+          continuation: winner.continuation,
+        },
+        Date.now(),
+        advance,
+      );
     } catch (error) {
       detached = true;
       const diagnostic =
@@ -289,7 +336,15 @@ export class Controller {
   ): Promise<void> {
     let stop: 'stopped' | 'unknown' = 'unknown';
     try {
-      stop = await bounded(this.executor.cancel(run), 1_500, 'unknown');
+      const stops = await Promise.all([
+        bounded(this.executor.cancel(run), 1_500, 'unknown'),
+        bounded(
+          this.workflow?.cancel(run) ?? Promise.resolve('stopped'),
+          1_500,
+          'unknown',
+        ),
+      ]);
+      stop = stops.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
     } catch {
       /* retain uncertain ownership */
     }

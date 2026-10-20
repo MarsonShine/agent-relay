@@ -63,7 +63,7 @@ export class Tasks {
       const task = taskSchema.parse({
         schemaVersion: 1,
         id: randomUUID(),
-        kind: 'simulation',
+        kind: input.kind ?? 'simulation',
         repo: input.repo,
         input: input.input,
         requirementVersion: 1,
@@ -153,6 +153,7 @@ export class Tasks {
         next = {
           ...next,
           requirementVersion: decision.requirementVersion,
+          stage: task.kind === 'development' ? 'triage' : task.stage,
           question: null,
           status: 'queued',
         };
