@@ -397,6 +397,7 @@ test('registered implementation worktree reaches Codex adapter through a fake CL
     directory = join(f.directory, 'executions');
   const backend = new CodexExecutor({
     directory,
+    protectedPaths: [directory],
     command: {
       executable: process.execPath,
       prefixArgs: [resolve('test/fixtures/fake-codex.ts'), 'success'],
@@ -414,11 +415,25 @@ test('registered implementation worktree reaches Codex adapter through a fake CL
     readFileSync(join(directory, run.id, 'invocation.json'), 'utf8'),
   );
   const args = invocation.args as string[];
+  assert.ok(invocation.temporaryDirectory.includes('run-temp'));
+  assert.ok(
+    !invocation.temporaryDirectory.startsWith(
+      f.manager.list(run.taskId)[0]!.path,
+    ),
+  );
+  assert.ok(args.includes('features.multi_agent=false'));
+  assert.ok(
+    args.some(
+      (a) =>
+        a.startsWith('permissions.relay=') &&
+        a.includes(JSON.stringify(invocation.temporaryDirectory)),
+    ),
+  );
   assert.equal(
     args[args.indexOf('-C') + 1],
     f.manager.list(run.taskId)[0]!.path,
   );
-  assert.equal(args[args.indexOf('-s') + 1], 'workspace-write');
+  assert.ok(args.includes('default_permissions="relay"'));
   assert.deepEqual(result.evidence, run.evidence);
   assert.equal(await executor.reconcile(run), 'stopped');
   assert.equal(git(f.repo, 'status', '--porcelain'), '');

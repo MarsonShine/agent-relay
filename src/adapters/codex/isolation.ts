@@ -11,6 +11,7 @@ const exec = promisify(execFile);
 export async function isolatedPermissions(
   request: ExecutionRequest,
   deniedPaths: readonly string[],
+  temporaryDirectory?: string,
 ): Promise<string[]> {
   if (!request.workspace?.managedId)
     throw new RelayError(
@@ -61,6 +62,11 @@ export async function isolatedPermissions(
     filesystem[join(common, 'refs', 'heads', namespace)] = 'write';
     filesystem[join(common, 'logs', 'refs', 'heads', namespace)] = 'write';
   }
+  if (
+    temporaryDirectory &&
+    request.run.profile.permission === 'workspace-write'
+  )
+    filesystem[temporaryDirectory] = 'write';
   const home = homedir();
   const credentials = [
     join(home, '.ssh'),
@@ -91,5 +97,11 @@ export async function isolatedPermissions(
     'features.apps=false',
     '-c',
     'features.plugins=false',
+    '-c',
+    'features.multi_agent=false',
+    '-c',
+    'features.multi_agent_v2=false',
+    '-c',
+    'features.multi_agent_v2_dynamic_tools=false',
   ];
 }

@@ -242,6 +242,91 @@ export class Workspaces {
       return this.save({ ...workspace, state: 'ready', contentHash });
     });
   }
+  /** Operator acknowledgement only: no scheduling, lease release, budget reset, or acceptance. */
+  async confirmCandidate(
+    taskId: string,
+    expectedVersion: number,
+    revision: string,
+  ) {
+    const task = this.tasks.get(taskId),
+      workspace = this.list(taskId).find((w) => w.kind === 'implementation');
+    const free = () =>
+      !this.tasks.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(taskId) &&
+      !this.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(taskId);
+    if (
+      !workspace ||
+      workspace.state !== 'ready' ||
+      !['blocked', 'paused'].includes(task.status) ||
+      task.version !== expectedVersion ||
+      !task.codeRevision ||
+      revision === task.codeRevision ||
+      !free()
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate confirmation requires a stopped blocked task and a new revision',
+      );
+    if (
+      (await this.git.verify(workspace, true)) !== revision ||
+      (
+        await this.git.command(workspace.path, [
+          'merge-base',
+          task.codeRevision,
+          revision,
+        ])
+      ).trim() !== task.codeRevision
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate does not extend the recorded revision',
+      );
+    const files = (
+      await this.git.command(workspace.path, [
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--name-only',
+        '-z',
+        task.codeRevision,
+        revision,
+      ])
+    )
+      .split('\0')
+      .filter(Boolean);
+    if (
+      !files.length ||
+      !task.config.allowedFiles ||
+      files.some((p) => !task.config.allowedFiles!.includes(p))
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate exceeds trusted change scope',
+      );
+    return this.tasks.db.transaction(() => {
+      if (this.tasks.get(taskId).version !== task.version || !free())
+        throw new RelayError('conflict', 'candidate ownership changed');
+      this.save({
+        ...workspace,
+        confirmedCandidate: { fromRevision: task.codeRevision!, revision },
+      });
+      const updated = this.tasks.save(task, {
+        ...task,
+        codeRevision: revision,
+      });
+      this.tasks.append(
+        taskId,
+        null,
+        `candidate-confirm:${updated.version}`,
+        'candidate.confirmed',
+        revision,
+      );
+      return updated;
+    });
+  }
   async inspect(
     id: string,
   ): Promise<{ workspace: Workspace; consistent: boolean }> {

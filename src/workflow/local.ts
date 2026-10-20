@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Runs } from '../storage/runs.ts';
 import { digest, Verifier } from '../verification/runner.ts';
 import type { Profile } from '../core/config.ts';
 import type { Run, Task } from '../core/contracts.ts';
@@ -58,16 +59,85 @@ export class LocalWorkflow {
         return row;
       });
   }
+  private pending(task: Task, history: HandoffRecord[], excludeRunId?: string) {
+    const pending = new Map<
+      string,
+      {
+        id: string;
+        origin: 'design' | 'implementation';
+        description: string;
+        runId: string;
+      }
+    >();
+    const accepted = new Set(history.map((h) => h.runId)),
+      runs = new Runs(this.workspaces.tasks);
+    for (const artifact of this.evidence.list(task.id)) {
+      if (
+        artifact.kind !== 'result' ||
+        artifact.runId === excludeRunId ||
+        accepted.has(artifact.runId) ||
+        artifact.evidence.requirementVersion !== task.requirementVersion ||
+        runs.get(artifact.runId).status !== 'stopped'
+      )
+        continue;
+      const content = this.evidence.read(artifact.id);
+      let parsed;
+      try {
+        parsed = handoffSchema.safeParse(JSON.parse(content));
+      } catch {
+        continue;
+      }
+      if (!parsed.success || parsed.data.stage !== 'implement') continue;
+      parsed.data.unresolved.forEach((description, index) => {
+        const id = `U-${artifact.runId}-${index}`;
+        pending.set(id, {
+          id,
+          origin: 'implementation',
+          description,
+          runId: artifact.runId,
+        });
+      });
+    }
+    for (const { runId, result } of history) {
+      if (result.stage !== 'design_review' && result.stage !== 'code_review')
+        continue;
+      for (const r of result.resolutions) pending.delete(r.findingId);
+      for (const f of result.findings)
+        if (f.severity === 'blocking')
+          pending.set(f.id, {
+            id: f.id,
+            origin: f.origin,
+            description: f.proof,
+            runId,
+          });
+    }
+    return [...pending.values()];
+  }
+  private implementationBase(task: Task): string | undefined {
+    const candidate = this.workspaces
+      .list(task.id)
+      .find((w) => w.kind === 'implementation')?.confirmedCandidate;
+    return candidate?.revision === task.codeRevision
+      ? candidate.fromRevision
+      : (task.codeRevision ?? undefined);
+  }
   context(task: Task): NonNullable<ExecutionRequest['handoff']> {
     const result = {
       contractVersion: 'M2-handoff-v1' as const,
+      ...(this.implementationBase(task)
+        ? { implementationBaseRevision: this.implementationBase(task)! }
+        : {}),
       ...(task.config.allowedFiles
         ? { allowedFiles: task.config.allowedFiles }
         : {}),
-      resultSchema: z.toJSONSchema(stageHandoffSchema(task.stage), {
-        target: 'draft-7',
-      }),
+      resultSchema: z.toJSONSchema(
+        stageHandoffSchema(task.stage, this.implementationBase(task)),
+        {
+          target: 'draft-7',
+        },
+      ),
       history: this.history(task),
+      pendingFindings: this.pending(task, this.history(task)),
       validations: this.verifier
         .reports(task)
         .filter(
@@ -112,17 +182,9 @@ export class LocalWorkflow {
         stage = target;
       }
     };
-    const unresolved = new Map<string, string>();
-    for (const entry of history) {
-      const review = entry.result;
-      if (review.stage !== 'design_review' && review.stage !== 'code_review')
-        continue;
-      for (const resolution of review.resolutions)
-        unresolved.delete(resolution.findingId);
-      for (const finding of review.findings)
-        if (finding.severity === 'blocking')
-          unresolved.set(finding.id, finding.origin);
-    }
+    const unresolved = new Map(
+      this.pending(task, history, run.id).map((f) => [f.id, f.origin]),
+    );
     if (result.stage === 'implement' || result.stage === 'design') {
       const relevant = [...unresolved]
         .filter(
@@ -193,11 +255,11 @@ export class LocalWorkflow {
         .find((w) => w.kind === 'implementation');
       if (
         !workspace ||
-        result.baseRevision !== task.codeRevision ||
+        result.baseRevision !== this.implementationBase(task) ||
         result.unresolved.length ||
         (await this.workspaces.git.verify(workspace, true)) !==
           result.resultRevision ||
-        result.resultRevision === task.codeRevision
+        result.resultRevision === this.implementationBase(task)
       )
         throw new RelayError(
           'conflict',
@@ -210,7 +272,7 @@ export class LocalWorkflow {
           '--no-textconv',
           '--name-only',
           '-z',
-          task.codeRevision!,
+          this.implementationBase(task)!,
           result.resultRevision,
         ])
       )
@@ -272,7 +334,11 @@ export class LocalWorkflow {
       for (const finding of result.findings)
         if (finding.severity === 'blocking')
           unresolved.set(finding.id, finding.origin);
-      const needsRepair = result.verdict === 'revise' || unresolved.size > 0;
+      const needsRepair =
+        result.verdict === 'revise' ||
+        [...unresolved.values()].some(
+          (origin) => result.stage === 'code_review' || origin === 'design',
+        );
       if (
         result.verdict === 'revise' &&
         result.findings.length === 0 &&
@@ -349,6 +415,14 @@ export class LocalWorkflow {
             'conflict',
             'task changed before handoff settlement',
           );
+        if (result.stage === 'implement') {
+          const w = this.workspaces
+            .list(task.id)
+            .find((w) => w.kind === 'implementation')!;
+          this.workspaces.tasks.db.sql
+            .prepare('UPDATE workspaces SET document=? WHERE id=?')
+            .run(JSON.stringify({ ...w, confirmedCandidate: null }), w.id);
+        }
         this.workspaces.tasks.db.sql
           .prepare(
             'INSERT INTO handoffs(run_id,task_id,document) VALUES(?,?,?)',

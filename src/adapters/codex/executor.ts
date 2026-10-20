@@ -3,7 +3,7 @@ import { isolatedPermissions } from './isolation.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, writeFile, readFile, lstat, realpath } from 'node:fs/promises';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, sep, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import { executionRequestSchema } from '../../core/execution.ts';
@@ -202,8 +202,25 @@ export class CodexExecutor implements Executor {
           'conflict',
           'run was cancelled before process start',
         );
+      let temporaryDirectory: string | undefined;
+      const environment = codexEnvironment();
+      environment.GIT_OPTIONAL_LOCKS = '0';
+      if (this.protectedPaths && profile.permission === 'workspace-write') {
+        const root = join(dirname(workspace), 'run-temp');
+        await mkdir(root, { recursive: true, mode: 0o700 });
+        if ((await lstat(root)).isSymbolicLink())
+          throw new RelayError('invalid', 'temporary root must not be a link');
+        temporaryDirectory = join(await realpath(root), request.run.id);
+        await mkdir(temporaryDirectory, { mode: 0o700 });
+        environment.TEMP = temporaryDirectory;
+        environment.TMP = temporaryDirectory;
+      }
       const isolation = this.protectedPaths
-        ? await isolatedPermissions(request, this.protectedPaths)
+        ? await isolatedPermissions(
+            request,
+            this.protectedPaths,
+            temporaryDirectory,
+          )
         : undefined;
       if (state.cancelled)
         throw new RelayError(
@@ -226,7 +243,7 @@ export class CodexExecutor implements Executor {
         ),
         {
           cwd: workspace,
-          env: codexEnvironment(),
+          env: environment,
           input: prompt(request),
           timeoutMs: Math.max(
             1,

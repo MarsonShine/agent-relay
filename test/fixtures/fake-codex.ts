@@ -26,7 +26,11 @@ if (schema.additionalProperties !== false)
   throw new Error('expected strict output schema');
 writeFileSync(
   join(dirname(output), 'invocation.json'),
-  JSON.stringify({ args, input }),
+  JSON.stringify({
+    args,
+    input,
+    temporaryDirectory: process.env.TEMP ?? process.env.TMP,
+  }),
 );
 const emit = (event: unknown) =>
   process.stdout.write(JSON.stringify(event) + '\n');

@@ -17,6 +17,10 @@ export const workspaceSchema = z.strictObject({
     .regex(/^[a-f0-9]{64}$/)
     .nullable(),
   branch: z.string().nullable(),
+  confirmedCandidate: z
+    .strictObject({ fromRevision: commitSchema, revision: commitSchema })
+    .nullable()
+    .default(null),
   baselineRevision: commitSchema,
   revision: commitSchema,
   requirementVersion: versionSchema,
