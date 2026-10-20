@@ -126,6 +126,45 @@
       "windows-latest",
       "ubuntu-latest"
     ],
-    "result": "pending pushed-head verification"
-  }
+    "result": "pending pushed-head verification",
+    "priorRuns": [
+      {
+        "commit": "e79639fc354a62e7c76257386716f3c140d23a5a",
+        "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39414816755",
+        "linux": "122 passed, 0 failed, 0 skipped",
+        "windows": "121 passed, 1 failed, 0 skipped",
+        "cause": "Task registration used synchronous JavaScript realpath while registry identity used native realpath; Windows short-path aliases mismatched. A local alias regression reproduced the failure before unifying canonicalization."
+      }
+    ]
+  },
+  "slices": [
+    {
+      "commit": "125b7fd",
+      "scope": "versioned role handoffs and atomic stage transitions"
+    },
+    {
+      "commit": "1f3a6ea",
+      "scope": "bounded trusted verification and shared process lifecycle"
+    },
+    {
+      "commit": "ca103a9",
+      "scope": "bounded repair, design feedback and independent resolutions"
+    },
+    {
+      "commit": "f9f72b5",
+      "scope": "native Git monitoring, policy ancestors and explicit creation confirmation"
+    },
+    {
+      "commit": "2589fab",
+      "scope": "native isolation and current-stage object outputs"
+    },
+    {
+      "commit": "68baf3f",
+      "scope": "stopped candidate confirmation, unresolved claims and per-run temporary directories"
+    },
+    {
+      "commit": "15f865b",
+      "scope": "explicit registered development service and CLI"
+    }
+  ]
 }

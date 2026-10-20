@@ -88,16 +88,14 @@ test(
         ).status,
         400,
       );
-      const task = (
-        await (
-          await call('/v1/tasks', {
-            schemaVersion: 1,
-            repo: f.repo,
-            input: 'explain value',
-            requestKey: 'good',
-          })
-        ).json()
-      ).task;
+      const created = await call('/v1/tasks', {
+        schemaVersion: 1,
+        repo: f.repo,
+        input: 'explain value',
+        requestKey: 'good',
+      });
+      assert.equal(created.status, 200, await created.clone().text());
+      const task = (await created.json()).task;
       for (let i = 0; i < 2; i++) {
         await service.controller.tick();
         await service.controller.wait();

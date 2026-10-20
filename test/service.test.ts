@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -130,4 +133,35 @@ test('same runtime directory cannot start two services or change its port', asyn
   const restarted = await startService({ directory, autoSchedule: false });
   assert.equal(restarted.port, service.port);
   await restarted.close();
+});
+
+test('task repository paths use native filesystem identity for platform aliases', async (t) => {
+  const { directory, call } = await serviceFixture(t);
+  const target =
+    process.platform === 'win32' ? process.env.ProgramFiles! : directory;
+  let alias = `${directory}/../${basename(directory)}`;
+  if (process.platform === 'win32') {
+    const script = `Add-Type -TypeDefinition 'using System.Text; using System.Runtime.InteropServices; public static class RelayAlias { [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] public static extern uint GetShortPathName(string p, StringBuilder b, uint n); }'; $b=New-Object System.Text.StringBuilder 32768; if ([RelayAlias]::GetShortPathName($env:RELAY_TEST_PATH,$b,32768) -eq 0) { throw 'short path unavailable' }; $b.ToString()`;
+    alias = execFileSync(
+      join(
+        process.env.SystemRoot!,
+        'System32/WindowsPowerShell/v1.0/powershell.exe',
+      ),
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 10000,
+        env: { ...process.env, RELAY_TEST_PATH: target },
+      },
+    ).trim();
+  }
+  const response = await call('/v1/tasks', {
+    schemaVersion: 1,
+    requestKey: 'alias',
+    repo: alias,
+    input: 'simulate alias identity',
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).task.repo, await realpath(target));
 });

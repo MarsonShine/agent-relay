@@ -12,7 +12,8 @@ import {
 import { LocalWorkflow } from '../workflow/local.ts';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { realpathSync, statSync, writeFileSync } from 'node:fs';
+import { statSync, writeFileSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -191,7 +192,7 @@ export async function startService(options: {
         const input = createSchema.parse(await jsonBody(request));
         let repo: string;
         try {
-          repo = realpathSync(input.repo);
+          repo = await realpath(input.repo);
           if (!statSync(repo).isDirectory()) throw new Error();
         } catch {
           throw new RelayError(
