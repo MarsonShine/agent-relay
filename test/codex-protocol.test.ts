@@ -7,6 +7,7 @@ import {
   invocation,
   prompt,
   finalSchema,
+  parseFinal,
   finalJsonSchema,
 } from '../src/adapters/codex/protocol.ts';
 import {
@@ -40,6 +41,8 @@ test('Codex policy keeps native Windows isolation and forbids read-only escalati
     CODEX_PERMISSION_PROFILE: 'inherited',
     CODEX_API_KEY: 'do-not-forward',
     GH_TOKEN: 'do-not-forward',
+    CODEX_APP_TOOLS_PIPE_PATH: 'do-not-forward',
+    CODEX_MCP_NODE_PATH: 'do-not-forward',
     OPENAI_API_KEY: 'do-not-forward',
     NODE_OPTIONS: 'do-not-forward',
   });
@@ -137,5 +140,43 @@ test('role configuration and final output reject unsupported and unknown setting
   assert.equal(
     finalSchema.safeParse({ ...final, permission: 'workspace-write' }).success,
     false,
+  );
+});
+
+test('development output is a current-stage object, independent of the design role name', (t) => {
+  const { execution } = codexFixture(t);
+  const request = {
+    ...execution,
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      resultSchema: {},
+      history: [],
+    },
+  };
+  const base = {
+    schemaVersion: 1,
+    status: 'completed',
+    evidence: execution.run.evidence,
+    question: null,
+    diagnostic: null,
+  };
+  const output = {
+    stage: 'triage',
+    kind: 'consultation',
+    goal: 'explain',
+    nonGoals: [],
+    acceptance: [{ id: 'A1', description: 'cite source' }],
+    scope: [],
+    simpleReason: null,
+  };
+  assert.equal(
+    JSON.parse(parseFinal(request, { ...base, output }).output!).stage,
+    'triage',
+  );
+  assert.throws(() =>
+    parseFinal(request, { ...base, output: JSON.stringify(output) }),
+  );
+  assert.throws(() =>
+    parseFinal(request, { ...base, output: { ...output, stage: 'design' } }),
   );
 });

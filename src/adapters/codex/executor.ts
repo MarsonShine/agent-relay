@@ -1,3 +1,5 @@
+import { platform } from 'node:os';
+import { isolatedPermissions } from './isolation.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, writeFile, readFile, lstat, realpath } from 'node:fs/promises';
@@ -19,8 +21,8 @@ import { CodexEvents, testedCodexVersion } from './events.ts';
 import { codexEnvironment, codexProfileSchema } from './config.ts';
 import {
   bindReference,
-  finalSchema,
-  finalJsonSchema,
+  parseFinal,
+  jsonSchemaFor,
   invocation,
   prompt,
   sessionFor,
@@ -54,9 +56,14 @@ export class CodexExecutor implements Executor {
   };
   private readonly command: Command;
   private readonly directory: string;
+  private readonly protectedPaths: readonly string[] | undefined;
   private readonly runs = new Map<string, OwnedRun>();
   private verified: Promise<void> | null = null;
-  constructor(options: { command: Command; directory: string }) {
+  constructor(options: {
+    command: Command;
+    directory: string;
+    protectedPaths?: readonly string[];
+  }) {
     if (
       !isAbsolute(options.command.executable) ||
       !isAbsolute(options.directory)
@@ -67,6 +74,7 @@ export class CodexExecutor implements Executor {
       prefixArgs: [...(options.command.prefixArgs ?? [])],
     };
     this.directory = options.directory;
+    this.protectedPaths = options.protectedPaths;
   }
   async doctor(): Promise<void> {
     this.verified ??= (async () => {
@@ -180,7 +188,7 @@ export class CodexExecutor implements Executor {
       await mkdir(directory, { mode: 0o700 }); // Never overwrite an earlier invocation's evidence.
       const schemaPath = join(directory, 'schema.json'),
         outputPath = join(directory, 'final.json');
-      await writeFile(schemaPath, JSON.stringify(finalJsonSchema), {
+      await writeFile(schemaPath, JSON.stringify(jsonSchemaFor(request)), {
         flag: 'wx',
         mode: 0o600,
       });
@@ -194,12 +202,28 @@ export class CodexExecutor implements Executor {
           'conflict',
           'run was cancelled before process start',
         );
+      const isolation = this.protectedPaths
+        ? await isolatedPermissions(request, this.protectedPaths)
+        : undefined;
+      if (state.cancelled)
+        throw new RelayError(
+          'conflict',
+          'run cancelled during permission preflight',
+        );
       const events = new PassThrough({ objectMode: true });
       const parser = new CodexEvents(testedCodexVersion);
       const stderr: Buffer[] = [];
       const process = new CodexProcess(
         this.command,
-        invocation(request, workspace, schemaPath, outputPath, reference),
+        invocation(
+          request,
+          workspace,
+          schemaPath,
+          outputPath,
+          reference,
+          platform(),
+          isolation,
+        ),
         {
           cwd: workspace,
           env: codexEnvironment(),
@@ -281,7 +305,8 @@ export class CodexExecutor implements Executor {
                 Math.min(request.task.config.maxArtifactBytes, 262_144)
             )
               throw new Error('invalid final file');
-            const final = finalSchema.parse(
+            const final = parseFinal(
+              request,
               JSON.parse(await readFile(outputPath, 'utf8')),
             );
             if (

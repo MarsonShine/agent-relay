@@ -100,6 +100,13 @@ export const handoffSchema = z.discriminatedUnion('stage', [
     limitations: z.array(text).max(30),
   }),
 ]);
+export function stageHandoffSchema(stage: string) {
+  const schema = handoffSchema.options.find(
+    (s) => s.shape.stage.safeParse(stage).success,
+  );
+  if (!schema) throw new Error('stage has no role handoff');
+  return z.strictObject({ ...schema.shape, stage: z.literal(stage) });
+}
 export type Handoff = z.infer<typeof handoffSchema>;
 export const handoffRecordSchema = z.strictObject({
   runId: z.uuid(),
@@ -111,6 +118,7 @@ export const handoffRecordSchema = z.strictObject({
 export type HandoffRecord = z.infer<typeof handoffRecordSchema>;
 export const handoffContextSchema = z.strictObject({
   contractVersion: z.literal('M2-handoff-v1'),
+  allowedFiles: z.array(relativeFile).max(100).optional(),
   resultSchema: z.record(z.string(), z.unknown()),
   history: z.array(handoffRecordSchema).max(100),
   validations: z

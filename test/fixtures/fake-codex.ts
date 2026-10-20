@@ -10,7 +10,7 @@ if (args.includes('--version')) {
   console.log(
     scenario === 'wrong-version'
       ? 'codex-cli unverified'
-      : 'codex-cli 0.162.0-alpha.17.2',
+      : 'codex-cli 0.163.0-alpha.10.2',
   );
   process.exit(0);
 }
@@ -70,7 +70,27 @@ if (scenario === 'slow' || scenario === 'tree') {
       scenario === 'stale'
         ? { ...request.evidence, requirementVersion: 99 }
         : request.evidence,
-    output: scenario === 'empty' ? '' : 'Fixture role finished.',
+    output:
+      scenario === 'workflow'
+        ? request.stage === 'triage'
+          ? {
+              stage: 'triage',
+              kind: 'consultation',
+              goal: 'explain value',
+              nonGoals: [],
+              acceptance: [{ id: 'A1', description: 'cite value' }],
+              scope: [],
+              simpleReason: null,
+            }
+          : {
+              stage: 'answer',
+              conclusion: 'baseline value',
+              sources: [{ path: 'value.txt', line: 1, excerpt: 'baseline' }],
+              limitations: [],
+            }
+        : scenario === 'empty'
+          ? ''
+          : 'Fixture role finished.',
     question: scenario === 'question' ? 'Choose the scope.' : null,
     diagnostic: null,
   };

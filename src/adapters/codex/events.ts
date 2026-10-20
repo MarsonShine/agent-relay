@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AgentEvent } from '../../core/execution.ts';
 import { RelayError } from '../../core/errors.ts';
 
-export const testedCodexVersion = '0.162.0-alpha.17.2';
+export const testedCodexVersion = '0.163.0-alpha.10.2';
 const envelope = z.object({ type: z.string().min(1).max(128) }).passthrough();
 const itemSchema = z
   .object({ id: z.string().min(1).max(256), type: z.string().min(1).max(128) })

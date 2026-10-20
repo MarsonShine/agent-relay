@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { digest, Verifier } from '../verification/runner.ts';
 import type { Profile } from '../core/config.ts';
 import type { Run, Task } from '../core/contracts.ts';
-import { handoffSchema, handoffRecordSchema } from '../core/handoff.ts';
+import {
+  handoffSchema,
+  handoffRecordSchema,
+  stageHandoffSchema,
+} from '../core/handoff.ts';
 import type { Handoff, HandoffRecord } from '../core/handoff.ts';
 import type { ExecutionRequest } from '../core/execution.ts';
 import { RelayError } from '../core/errors.ts';
@@ -57,7 +61,12 @@ export class LocalWorkflow {
   context(task: Task): NonNullable<ExecutionRequest['handoff']> {
     const result = {
       contractVersion: 'M2-handoff-v1' as const,
-      resultSchema: z.toJSONSchema(handoffSchema, { target: 'draft-7' }),
+      ...(task.config.allowedFiles
+        ? { allowedFiles: task.config.allowedFiles }
+        : {}),
+      resultSchema: z.toJSONSchema(stageHandoffSchema(task.stage), {
+        target: 'draft-7',
+      }),
       history: this.history(task),
       validations: this.verifier
         .reports(task)
