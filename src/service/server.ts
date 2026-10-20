@@ -1,3 +1,15 @@
+import { runtimeSchema } from './development.ts';
+import type { DevelopmentRuntime } from './development.ts';
+import { CodexExecutor } from '../adapters/codex/executor.ts';
+import { WorkspaceExecutor } from '../workspace/executor.ts';
+import { Workspaces } from '../workspace/manager.ts';
+import {
+  GitWorktrees,
+  destination,
+  inside,
+  pathKey,
+} from '../workspace/git.ts';
+import { LocalWorkflow } from '../workflow/local.ts';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { realpathSync, statSync, writeFileSync } from 'node:fs';
@@ -58,9 +70,59 @@ export async function startService(options: {
   port?: number;
   config?: Config;
   autoSchedule?: boolean;
+  development?: DevelopmentRuntime;
 }) {
   const config = configSchema.parse(options.config ?? defaultConfig());
-  const directory = privateDirectory(options.directory);
+  const directory = await destination(options.directory);
+  const runtime = options.development
+    ? runtimeSchema.parse(options.development)
+    : undefined;
+  if (runtime && process.platform !== 'win32')
+    throw new RelayError(
+      'invalid',
+      'development runtime is validated only on Windows',
+    );
+  let registeredRepo: string | undefined;
+  if (runtime) {
+    registeredRepo = (await new GitWorktrees().identity(runtime.repo)).repo;
+    const root = await destination(runtime.workspaces);
+    if (
+      inside(registeredRepo, directory) ||
+      inside(root, directory) ||
+      inside(directory, root)
+    )
+      throw new RelayError(
+        'invalid',
+        'controller data and workspace roots must be separate from each other and the target checkout',
+      );
+    if (
+      !config.verification ||
+      !config.allowedFiles ||
+      Object.values(config.profiles).some((p) => p.executor !== 'codex-cli') ||
+      config.profiles.implement.permission !== 'workspace-write'
+    )
+      throw new RelayError(
+        'invalid',
+        'development requires Codex profiles, trusted allowedFiles and verification commands',
+      );
+    await new GitWorktrees().preflight(
+      registeredRepo,
+      await new GitWorktrees().head(registeredRepo),
+      config.allowedFiles,
+    );
+  }
+  privateDirectory(directory);
+  const backend = runtime
+    ? new CodexExecutor({
+        command: {
+          executable: runtime.command.executable,
+          prefixArgs: runtime.command.prefixArgs ?? [],
+        },
+        directory: join(directory, 'executions'),
+        protectedPaths: [directory],
+      })
+    : new FakeExecutor();
+  if (backend instanceof CodexExecutor) await backend.doctor();
   const token = ensureToken(directory);
   const previous = connection(directory);
   const port = options.port ?? previous?.port ?? 4318;
@@ -74,7 +136,34 @@ export async function startService(options: {
   const db = new Database(join(directory, 'state.db'));
   const tasks = new Tasks(db, [token]);
   const evidence = new Evidence(tasks, join(directory, 'evidence'), [token]);
-  const controller = new Controller(tasks, evidence, new FakeExecutor());
+  const workspaces = runtime
+    ? new Workspaces(tasks, runtime.workspaces)
+    : undefined;
+  const workflow = workspaces
+    ? new LocalWorkflow(workspaces, evidence)
+    : undefined;
+  if (
+    registeredRepo &&
+    tasks
+      .list()
+      .some(
+        (t) =>
+          !['succeeded', 'failed', 'cancelled'].includes(t.status) &&
+          pathKey(t.repo) !== pathKey(registeredRepo!),
+      )
+  ) {
+    db.close();
+    throw new RelayError(
+      'conflict',
+      'data directory contains another registered repository',
+    );
+  }
+  const controller = new Controller(
+    tasks,
+    evidence,
+    workspaces ? new WorkspaceExecutor(backend, workspaces) : backend,
+    workflow,
+  );
   let listeningPort = 0;
   let schedulerError: string | null = null;
   let timer: NodeJS.Timeout | undefined;
@@ -92,7 +181,7 @@ export async function startService(options: {
       const method = request.method;
       if (url.pathname === '/v1/health' && method === 'GET') {
         send(response, 200, {
-          backend: 'simulation',
+          backend: runtime ? 'codex-cli' : 'simulation',
           schedulerError,
           outstandingRuns: controller.runs.outstanding().length,
         });
@@ -110,7 +199,13 @@ export async function startService(options: {
             'repository directory is unavailable',
           );
         }
+        if (registeredRepo && pathKey(repo) !== pathKey(registeredRepo))
+          throw new RelayError(
+            'invalid',
+            'repository is not registered in trusted runtime configuration',
+          );
         const task = tasks.create({
+          ...(runtime ? { kind: 'development' as const } : {}),
           ...input,
           repo,
           config,
@@ -140,8 +235,35 @@ export async function startService(options: {
           ) {
             issues.push('completed task is missing matching result metadata');
           }
+          if (
+            task.kind === 'development' &&
+            task.stage === 'deliver' &&
+            task.status === 'succeeded'
+          ) {
+            if (!workflow?.verifier.accepted(task))
+              issues.push('current candidate lacks intact trusted validation');
+            try {
+              const w = workspaces
+                ?.list(task.id)
+                .find((w) => w.kind === 'implementation');
+              if (
+                !w ||
+                (await workspaces!.git.verify(w, true)) !== task.codeRevision
+              )
+                issues.push('delivered workspace changed');
+            } catch {
+              issues.push('delivered workspace cannot be verified');
+            }
+          }
           send(response, 200, {
             task,
+            ...(workflow
+              ? {
+                  handoffs: workflow.history(task),
+                  validations: workflow.verifier.reports(task),
+                  workspaces: workspaces!.list(task.id),
+                }
+              : {}),
             artifacts,
             evidenceIssues: issues,
             accepted: task.status === 'succeeded' && issues.length === 0,

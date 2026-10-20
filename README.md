@@ -2,7 +2,7 @@
 
 Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它将需求调查、设计、实现、独立审查和反馈修复组织为可恢复、有验收依据的工作流。
 
-**当前状态：M1 控制内核已实现，Windows/Linux CI 均通过。** 可运行本地服务和 CLI，当前只开放模拟执行器。M0 Windows 基线已复验通过，只读问题已确认并修复为审批与原生沙箱配置问题；服务目前仍仅开放模拟后端，M2.1 已实现有界 Codex 适配器并完成启动、续接与取消实测，M2.2 已实现工作区登记、Run 独占与固定审查快照；M2.3 及后续闭环尚未完成。跨平台结果见 [M1 验收记录](docs/m1.md)；只读复验及能力边界见 [M0 最新结果](docs/m0/README.md)。
+**当前状态：M2 本地开发引擎已实现，真实试点验收进行中。** 默认服务仍使用模拟执行器；显式配置开发运行时后可使用 Codex CLI 进行版本化角色交接、隔离实现、可信验证和有界审查修复。真实运行当前仅开放已验证的 Windows 平台；Linux 保留模拟及跨平台回归。M2.6 的最终结果以 [M2 契约与验收](docs/m2.md) 为准。
 
 ## 产品边界
 
@@ -35,7 +35,7 @@ node dist/cli.js task status <task-id> --data-dir .agent-relay/runtime
 node dist/cli.js task events <task-id> --after 0 --limit 100 --data-dir .agent-relay/runtime
 ```
 
-输出为 JSON。create 返回 `task.id`；同一个 `--key` 与相同请求可安全重试，内容不一致返回冲突。`accepted: true` 在 M1 只表示模拟执行证据完整，不表示已实现输入需求或验证目标仓库代码。
+输出为 JSON。create 返回 `task.id`；同一个 `--key` 与相同请求可安全重试，内容不一致返回冲突。模拟任务的 `accepted: true` 只表示模拟证据完整；开发任务的 accepted 表示当前本地候选通过可信检查和独立审查，不表示已创建 PR 或合并。
 
 变更命令使用 status 返回的 `task.version`：
 
@@ -51,6 +51,20 @@ answer 的问题标识来自 status 中的 `task.question`。收到版本冲突�
 配置样例见 [examples/m1.config.json](examples/m1.config.json)。复制到私有运行目录后，用 `serve --config <file>` 加载；所有未知字段和未支持能力都会被拒绝。修改 `profiles.design.native.scenario` 为 `input` 可演示待答复，为 `slow` 可演示暂停或取消；默认 `success` 会快速完成。配置仅作用于新任务，已有任务保留创建时快照。M1 使用 design 角色执行单阶段模拟，完整角色交接属于 M2。
 
 默认模拟限额：每任务最多 4 次运行、总时限 60 秒、单次 5 秒、租约 5 秒、每份日志或成果 256 KiB。总时限包含暂停和待答复时间，重启不重置；这些是模拟默认值，不是 Codex 的实测限额。
+
+## 显式开发运行时
+
+将 [M2 配置样例](examples/m2.config.json) 与 [运行时样例](examples/m2.runtime.json) 复制到私有目录，并替换所有占位路径、allowedFiles 和验证命令。三种角色均固定使用已支持的 Codex CLI / OpenAI / GPT-6 Luna，设计和审查只读；实现只能写任务工作树。运行时只接受登记的仓库，HTTP 任务正文不能指定命令、扩大路径范围或改变权限。
+
+```text
+node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config.json> --runtime <private-runtime.json>
+```
+
+随后沿用 task create/status/events 等命令。数据目录、任务工作树根目录及目标原 checkout 必须分离。项目必须有提交基线；源代码的未提交修改不会复制到任务工作树。有效的未提交仓库规则、自定义 hooks/filters、子模块和符号链接等未支持能力会拒绝接入，不自动忽略规则。可信命令使用绝对 executable 和参数数组，在候选工作树内运行；Windows 内置文件监控按版本预检支持，自定义监控脚本仍拒绝。
+
+开发状态包含阶段交接、每轮验证和工作树信息。实现结果需要干净的新提交；审查绑定候选 SHA 和需求版本，旧检查不能覆盖新代码。检查失败或审查反馈在同一迭代预算内修复；缺少证据、停止未知或预算耗尽会阻塞。用户答复升级需求版本并重新 triage，已用次数和截止时间不重置。
+
+真实调用会产生模型使用量；调用次数与时间有上限，金额未知。原始运行记录仅保留在私有目录。当前 deliver 是本地验收阶段，GitHub 交付属于 M4；不会自动推送目标项目或合并。
 
 ## 本机数据与恢复边界
 

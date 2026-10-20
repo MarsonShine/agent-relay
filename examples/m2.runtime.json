@@ -1,0 +1,7 @@
+{
+  "repo": "/absolute/path/to/repository",
+  "workspaces": "/absolute/path/to/task-worktrees",
+  "command": {
+    "executable": "/absolute/path/to/codex"
+  }
+}

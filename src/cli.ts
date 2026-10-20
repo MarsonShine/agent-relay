@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runtimeSchema } from './service/development.ts';
 import { parseArgs } from 'node:util';
 import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -10,8 +11,8 @@ import { RelayError } from './core/errors.ts';
 import { callLocal } from './service/client.ts';
 import { startService } from './service/server.ts';
 
-const help = `Agent Relay M1 (simulation only)
-node dist/cli.js serve [--data-dir DIR] [--config FILE] [--port PORT]
+const help = `Agent Relay (simulation by default; explicit trusted development runtime required)
+node dist/cli.js serve [--data-dir DIR] [--config FILE] [--runtime FILE] [--port PORT]
 node dist/cli.js doctor [--data-dir DIR]
 node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
@@ -19,7 +20,7 @@ node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
 node dist/cli.js task answer ID --version N --question ID --question-version N --input FILE [--data-dir DIR]
 node dist/cli.js task pause|resume|cancel ID --version N [--data-dir DIR]
 All output is JSON. Mutations require the task version returned by status.
-No model calls, repository writes, PR publication or automatic merge in M1.`;
+Development runtime permits bounded Codex calls in managed worktrees. No PR publication or automatic merge.`;
 function readInput(path: string): string {
   const stat = statSync(path);
   if (!stat.isFile() || stat.size > 131_072)
@@ -37,6 +38,7 @@ async function main(): Promise<void> {
       help: { type: 'boolean' },
       'data-dir': { type: 'string' },
       config: { type: 'string' },
+      runtime: { type: 'string' },
       port: { type: 'string' },
       repo: { type: 'string' },
       input: { type: 'string' },
@@ -73,20 +75,27 @@ async function main(): Promise<void> {
       );
   };
   if (group === 'serve') {
-    validateOptions(['config', 'port'], 1);
+    validateOptions(['config', 'runtime', 'port'], 1);
     const config = values.config
       ? configSchema.parse(JSON.parse(readInput(values.config)))
       : defaultConfig();
     const service = await startService({
       directory,
       config,
+      ...(values.runtime
+        ? {
+            development: runtimeSchema.parse(
+              JSON.parse(readInput(values.runtime)),
+            ),
+          }
+        : {}),
       ...(values.port === undefined ? {} : { port: Number(values.port) }),
     });
     console.log(
       JSON.stringify({
         schemaVersion: 1,
         listening: `http://127.0.0.1:${service.port}`,
-        backend: 'simulation',
+        backend: values.runtime ? 'codex-cli' : 'simulation',
       }),
     );
     const close = () => {

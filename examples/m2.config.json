@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "design": {
+      "role": "design",
+      "executor": "codex-cli",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "permission": "read-only",
+      "native": {
+        "reasoningEffort": "low"
+      },
+      "timeoutMs": 180000
+    },
+    "implement": {
+      "role": "implement",
+      "executor": "codex-cli",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "permission": "workspace-write",
+      "native": {
+        "reasoningEffort": "low"
+      },
+      "timeoutMs": 180000
+    },
+    "review": {
+      "role": "review",
+      "executor": "codex-cli",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "permission": "read-only",
+      "native": {
+        "reasoningEffort": "low"
+      },
+      "timeoutMs": 180000
+    }
+  },
+  "budget": {
+    "maxRuns": 8,
+    "maxTaskMs": 3600000,
+    "maxIterations": 3
+  },
+  "leaseMs": 60000,
+  "maxArtifactBytes": 262144,
+  "maxLogBytes": 1048576,
+  "allowedFiles": ["src/example.ts", "test/example.test.ts"],
+  "verification": {
+    "version": 1,
+    "maxLogBytes": 262144,
+    "commands": [
+      {
+        "id": "project-tests",
+        "version": 1,
+        "executable": "/absolute/path/to/node",
+        "args": ["--test", "test/example.test.ts"],
+        "cwd": ".",
+        "timeoutMs": 180000
+      }
+    ]
+  }
+}
