@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Verifier } from '../verification/runner.ts';
 import type { Profile } from '../core/config.ts';
 import type { Run, Task } from '../core/contracts.ts';
 import { handoffSchema, handoffRecordSchema } from '../core/handoff.ts';
@@ -13,9 +14,11 @@ import type { Advance } from '../core/handoff.ts';
 export class LocalWorkflow {
   readonly workspaces: Workspaces;
   readonly evidence: Evidence;
+  readonly verifier: Verifier;
   constructor(workspaces: Workspaces, evidence: Evidence) {
     this.workspaces = workspaces;
     this.evidence = evidence;
+    this.verifier = new Verifier(workspaces);
   }
   role(task: Task): Profile['role'] {
     return task.stage === 'implement'
@@ -70,7 +73,7 @@ export class LocalWorkflow {
     const history = this.history(task);
     const latest = (stage: Handoff['stage']) =>
       history.findLast((h) => h.result.stage === stage);
-    let stage = task.stage,
+    let stage: Task['stage'] = task.stage,
       codeRevision = task.codeRevision;
     let status: Advance['status'] = 'queued';
     const triage = latest('triage')?.result;
@@ -149,6 +152,17 @@ export class LocalWorkflow {
           'conflict',
           'implementation changed files outside the approved triage scope or omitted changes',
         );
+      const validation = await this.verifier.run(
+        task,
+        run,
+        workspace,
+        result.resultRevision,
+      );
+      if (validation.status !== 'passed')
+        throw new RelayError(
+          'conflict',
+          'trusted verification failed or stop is unknown',
+        );
       codeRevision = result.resultRevision;
       stage = 'code_review';
     } else {
@@ -191,12 +205,15 @@ export class LocalWorkflow {
           'conflict',
           'review must cover every acceptance criterion exactly once',
         );
-      if (result.stage === 'code_review')
-        throw new RelayError(
-          'conflict',
-          'trusted verification is required before local delivery',
-        );
-      stage = 'implement';
+      if (result.stage === 'code_review') {
+        if (!this.verifier.accepted(task))
+          throw new RelayError(
+            'conflict',
+            'trusted verification is required before local delivery',
+          );
+        stage = 'deliver';
+        status = 'succeeded';
+      } else stage = 'implement';
     }
     const record = handoffRecordSchema.parse({
       runId: run.id,
@@ -230,7 +247,10 @@ export class LocalWorkflow {
       },
     };
   }
-  async cancel(_run: Run): Promise<'stopped' | 'unknown'> {
-    return 'stopped';
+  async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
+    return this.verifier.reconcile(run);
+  }
+  async cancel(run: Run): Promise<'stopped' | 'unknown'> {
+    return this.verifier.cancel(run);
   }
 }

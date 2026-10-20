@@ -40,6 +40,7 @@ const migrations = [
     run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), owner TEXT NOT NULL, token TEXT NOT NULL UNIQUE
   ) STRICT;`,
   `CREATE TABLE handoffs (run_id TEXT PRIMARY KEY REFERENCES runs(id), task_id TEXT NOT NULL REFERENCES tasks(id), document TEXT NOT NULL CHECK(json_valid(document))) STRICT;`,
+  `CREATE TABLE validations (run_id TEXT PRIMARY KEY REFERENCES runs(id), task_id TEXT NOT NULL REFERENCES tasks(id), document TEXT NOT NULL CHECK(json_valid(document))) STRICT;`,
 ];
 
 export class Database {

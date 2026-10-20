@@ -76,7 +76,16 @@ export class Controller {
           1_500,
           'unknown',
         );
-        if (state === 'stopped') this.runs.confirmStopped(run.id);
+        const workflowState =
+          this.tasks.get(run.taskId).kind === 'development'
+            ? await bounded(
+                this.workflow?.reconcile(run) ?? Promise.resolve('unknown'),
+                1500,
+                'unknown',
+              )
+            : 'stopped';
+        if (state === 'stopped' && workflowState === 'stopped')
+          this.runs.confirmStopped(run.id);
       }
       const task = this.tasks.list('queued')[0];
       if (!task) return;

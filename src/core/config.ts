@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { verificationPolicySchema } from '../verification/contracts.ts';
 import { fakeNativeSchema } from '../adapters/fake-config.ts';
 import { codexProfileSchema } from '../adapters/codex/config.ts';
 
@@ -22,6 +23,7 @@ export const budgetSchema = z.strictObject({
 export const configSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
+    verification: verificationPolicySchema.optional(),
     profiles: z.strictObject({
       design: profileSchema,
       implement: profileSchema,
