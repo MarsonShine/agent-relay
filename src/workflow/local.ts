@@ -16,6 +16,20 @@ import type { Workspaces } from '../workspace/manager.ts';
 
 import type { Advance } from '../core/handoff.ts';
 
+// Summaries and repair claims cannot establish changed design content.
+export function designProgress(
+  result: Extract<Handoff, { stage: 'design' }>,
+): string {
+  return digest({
+    evidence: result.evidence,
+    rootCause: result.rootCause,
+    invariant: result.invariant,
+    fixLayer: result.fixLayer,
+    steps: result.steps,
+    validationPlan: result.validationPlan,
+  });
+}
+
 export class LocalWorkflow {
   readonly workspaces: Workspaces;
   readonly evidence: Evidence;
@@ -200,8 +214,11 @@ export class LocalWorkflow {
         );
       if (
         result.stage === 'design' &&
-        latest('design') !== undefined &&
-        digest(result) === digest(latest('design')?.result)
+        history.some(
+          (h) =>
+            h.result.stage === 'design' &&
+            designProgress(h.result) === designProgress(result),
+        )
       )
         throw new RelayError('conflict', 'design feedback made no progress');
     }
@@ -289,6 +306,27 @@ export class LocalWorkflow {
           'conflict',
           'implementation changed files outside the approved triage scope or omitted changes',
         );
+      const tree = async (revision: string) =>
+        (
+          await this.workspaces.git.command(workspace.path, [
+            'rev-parse',
+            `${revision}^{tree}`,
+          ])
+        ).trim();
+      const candidateTree = await tree(result.resultRevision);
+      const priorRevisions = [
+        workspace.baselineRevision,
+        ...history.flatMap((h) =>
+          h.result.stage === 'implement' ? [h.result.resultRevision] : [],
+        ),
+      ];
+      for (const revision of new Set(priorRevisions)) {
+        if (candidateTree === (await tree(revision)))
+          throw new RelayError(
+            'conflict',
+            'implementation repeats an earlier code tree; no progress',
+          );
+      }
       const validation = await this.verifier.run(
         task,
         run,

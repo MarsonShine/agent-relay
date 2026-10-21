@@ -7,12 +7,14 @@ export type ProcessExit = {
   code: number | null;
   stopped: boolean;
   reason: string | null;
+  transientFailure?: boolean | undefined;
 };
 export class BoundedProcess {
   readonly child: ChildProcessWithoutNullStreams;
   readonly done: Promise<ProcessExit>;
   private closeSeen = false;
   private spawnFailed = false;
+  private transientFailure = false;
   private result: ProcessExit | null = null;
   private resolveDone!: (exit: ProcessExit) => void;
   private resolveClosed!: () => void;
@@ -71,7 +73,10 @@ export class BoundedProcess {
     this.child.stderr.on('data', (chunk: Buffer) =>
       receive(chunk, options.stderr),
     );
-    this.child.on('error', () => {
+    this.child.on('error', (error: NodeJS.ErrnoException) => {
+      this.transientFailure = ['EAGAIN', 'EMFILE', 'ENFILE'].includes(
+        error.code ?? '',
+      );
       this.spawnFailed = true;
       this.reason ??= 'process could not start';
     });
@@ -82,7 +87,12 @@ export class BoundedProcess {
       this.closeSeen = true;
       this.resolveClosed();
       if (!this.stopping)
-        this.complete({ code, stopped: true, reason: this.reason });
+        this.complete({
+          code,
+          stopped: true,
+          reason: this.reason,
+          ...(this.transientFailure ? { transientFailure: true } : {}),
+        });
     });
     this.timer = setTimeout(() => {
       void this.stop('execution timeout');

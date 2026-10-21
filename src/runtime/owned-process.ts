@@ -22,6 +22,7 @@ export type OwnedRequest = {
   deadlineAt: number;
 };
 const receiptSchema = z.strictObject({
+  transientFailure: z.boolean().optional(),
   owner: z.uuid(),
   code: z.number().int().nullable(),
   stopped: z.boolean(),

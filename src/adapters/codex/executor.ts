@@ -1,3 +1,4 @@
+import { ZodError } from 'zod';
 import { existsSync, mkdirSync } from 'node:fs';
 import { OwnedProcess, stopOwned } from '../../runtime/owned-process.ts';
 import { platform } from 'node:os';
@@ -315,6 +316,9 @@ export class CodexExecutor implements Executor {
                   turn.outcome === 'failed' || exit.reason
                     ? ('failed' as const)
                     : ('unknown' as const),
+                ...(exit.transientFailure
+                  ? { failureKind: 'infrastructure' as const }
+                  : {}),
                 diagnostic:
                   (exit.reason ?? turn.diagnostics.join('; ')) ||
                   'missing terminal result',
@@ -363,9 +367,12 @@ export class CodexExecutor implements Executor {
                 final.diagnostic ??
                 (final.status === 'blocked' ? 'agent reported blocked' : null),
             };
-          } catch {
+          } catch (error) {
             return {
               ...base,
+              ...(error instanceof SyntaxError || error instanceof ZodError
+                ? { failureKind: 'semantic' as const }
+                : {}),
               diagnostic:
                 'final output missing, invalid, oversized or bound to stale evidence',
             };
