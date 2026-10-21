@@ -16,6 +16,7 @@ node dist/cli.js serve [--data-dir DIR] [--config FILE] [--runtime FILE] [--port
 node dist/cli.js doctor [--data-dir DIR]
 node dist/cli.js task import --issue N --key KEY [--data-dir DIR]
 node dist/cli.js task publish|reconcile-delivery|complete-delivery|cancel-delivery ID --version N [--data-dir DIR]
+node dist/cli.js task feedback ID --version N --input JSON_FILE [--data-dir DIR]
 node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
 node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
@@ -148,13 +149,20 @@ async function main(): Promise<void> {
         'reconcile-delivery',
         'complete-delivery',
         'cancel-delivery',
+        'feedback',
       ].includes(action ?? '')
     ) {
-      validateOptions(['version'], 3);
+      validateOptions(
+        action === 'feedback' ? ['version', 'input'] : ['version'],
+        3,
+      );
       result = await callLocal(directory, `/v1/tasks/${taskId}/delivery`, {
         schemaVersion: 1,
         expectedVersion: Number(requireOption('version')),
         action: action!.replace('-delivery', ''),
+        ...(action === 'feedback'
+          ? { feedback: JSON.parse(readInput(requireOption('input'))) }
+          : {}),
       });
     } else if (action === 'status') {
       validateOptions([], 3);

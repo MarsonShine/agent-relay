@@ -252,17 +252,25 @@ export class Tasks {
     task: Task,
     kind: 'requirement' | 'implementation' | 'design',
     text: string,
-    source: 'github-feedback' | 'github-ci',
+    source: 'github-feedback' | 'github-ci' | 'local-user',
     sourceKey: string,
   ): Task {
     const delivery = this.db.sql
       .prepare('SELECT document FROM deliveries WHERE task_id=?')
       .get(task.id);
+    const eligible =
+      source === 'local-user'
+        ? kind !== 'requirement' &&
+          !delivery &&
+          !!this.db.sql
+            .prepare('SELECT 1 FROM github_sources WHERE task_id=?')
+            .get(task.id)
+        : !!delivery &&
+          JSON.parse(String(delivery.document)).status === 'watching';
     if (
       task.status !== 'succeeded' ||
       task.stage !== 'deliver' ||
-      !delivery ||
-      JSON.parse(String(delivery.document)).status !== 'watching' ||
+      !eligible ||
       this.db.sql
         .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
         .get(task.id) ||

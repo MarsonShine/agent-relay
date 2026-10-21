@@ -5,14 +5,24 @@ import type { Task } from '../core/contracts.ts';
 import { Deliveries } from './delivery-store.ts';
 import { Publisher } from './delivery.ts';
 import { Poller } from './poll.ts';
-import { Feedback } from './feedback.ts';
+import { Feedback, feedbackSchema } from './feedback.ts';
 import type { Push } from './push.ts';
 
-export const deliveryCommandSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  expectedVersion: z.number().int().positive(),
-  action: z.enum(['publish', 'reconcile', 'complete', 'cancel']),
-});
+export const deliveryCommandSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    expectedVersion: z.number().int().positive(),
+    action: z.enum(['publish', 'reconcile', 'complete', 'cancel']),
+  }),
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    expectedVersion: z.number().int().positive(),
+    action: z.literal('feedback'),
+    feedback: feedbackSchema.extend({
+      kind: z.enum(['implementation', 'design']),
+    }),
+  }),
+]);
 export class GitHubWorkflow {
   readonly store: Deliveries;
   readonly publisher: Publisher;
@@ -53,6 +63,37 @@ export class GitHubWorkflow {
       task = this.store.tasks.get(taskId);
     if (task.version !== command.expectedVersion)
       throw new RelayError('conflict', 'task version changed');
+    if (command.action === 'feedback') {
+      const f = command.feedback;
+      if (
+        !this.store.sources.get(taskId) ||
+        this.store.get(taskId) ||
+        f.requirementVersion !== task.requirementVersion ||
+        f.revision !== task.codeRevision ||
+        f.files.some((path) => !task.config.allowedFiles?.includes(path))
+      )
+        throw new RelayError(
+          'conflict',
+          'prepublication feedback requires current imported candidate and trusted scope',
+        );
+      await this.candidate(task);
+      this.store.tasks.db.transaction(() => {
+        const current = this.store.tasks.get(taskId);
+        if (current.version !== task.version || this.store.get(taskId))
+          throw new RelayError(
+            'conflict',
+            'candidate changed before local feedback',
+          );
+        this.store.tasks.feedbackInside(
+          current,
+          f.kind,
+          f.text,
+          'local-user',
+          `local-feedback:${current.version}:${current.codeRevision}`,
+        );
+      });
+      return;
+    }
     if (command.action === 'publish') {
       await this.publisher.prepare(task);
       return;
