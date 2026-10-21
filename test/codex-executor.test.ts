@@ -181,7 +181,7 @@ test('unsupported versions, missing workspaces and original-checkout writes are 
       directory,
       command: { executable: process.execPath },
     }).reconcile(execution.run),
-    'unknown',
+    'stopped',
   );
   assert.ok(existsSync(workspace));
 });
@@ -236,4 +236,33 @@ test('run cannot expand the task frozen permission profile', async (t) => {
     workspace: { path: workspace, kind: 'worktree' as const },
   };
   await assert.rejects(executor.start(request), /frozen profile/);
+});
+
+test('new adapter instance reconciles an owned writer and prevents later file changes', async (t) => {
+  const { executor, execution, directory, workspace } = setup(t, 'tree');
+  const handle = await executor.start(execution);
+  const completion = collect(handle);
+  const heartbeat = join(workspace, 'heartbeat.json');
+  for (let i = 0; i < 200 && !existsSync(heartbeat); i++) await delay(25);
+  assert.ok(existsSync(heartbeat));
+  const restarted = new CodexExecutor({
+    directory,
+    command: { executable: process.execPath },
+  });
+  assert.equal(await restarted.reconcile(execution.run), 'stopped');
+  const before = readFileSync(heartbeat, 'utf8');
+  await delay(150);
+  assert.equal(readFileSync(heartbeat, 'utf8'), before);
+  assert.throws(() => process.kill(JSON.parse(before).pid, 0));
+  assert.equal((await completion).result.stopped, true);
+});
+
+test('legacy executions without a durable launch protocol remain unknown', async (t) => {
+  const { execution, directory } = setup(t, 'success');
+  const { recoveryVersion: _version, ...legacy } = execution.run;
+  const restarted = new CodexExecutor({
+    directory,
+    command: { executable: process.execPath },
+  });
+  assert.equal(await restarted.reconcile(legacy), 'unknown');
 });

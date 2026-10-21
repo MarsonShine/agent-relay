@@ -45,7 +45,9 @@ const migrations = [
 
 export class Database {
   readonly sql: DatabaseSync;
+  readonly path: string;
   constructor(path: string) {
+    this.path = path;
     this.sql = new DatabaseSync(path, { timeout: 5_000 });
     try {
       this.sql.exec(

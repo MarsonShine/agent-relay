@@ -67,6 +67,7 @@ export const runSchema = z.strictObject({
   attempt: versionSchema,
   profile: profileSchema,
   executorVersion: z.string().min(1),
+  recoveryVersion: z.literal(1).optional(),
   evidence: evidenceSchema,
   status: z.enum(['active', 'unknown', 'stopped']),
   owner: idSchema,

@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync } from 'node:fs';
+import { OwnedProcess, stopOwned } from '../../runtime/owned-process.ts';
 import { platform } from 'node:os';
 import { isolatedPermissions } from './isolation.ts';
 import { execFile } from 'node:child_process';
@@ -27,7 +29,6 @@ import {
   prompt,
   sessionFor,
 } from './protocol.ts';
-import { CodexProcess } from './process.ts';
 import type { Command } from './process.ts';
 
 const execute = promisify(execFile);
@@ -40,7 +41,7 @@ function inside(parent: string, child: string): boolean {
 }
 type OwnedRun = {
   owner: string;
-  process: CodexProcess | null;
+  process: OwnedProcess | null;
   cancelled: boolean;
   settled: boolean;
 };
@@ -230,7 +231,13 @@ export class CodexExecutor implements Executor {
       const events = new PassThrough({ objectMode: true });
       const parser = new CodexEvents(testedCodexVersion);
       const stderr: Buffer[] = [];
-      const process = new CodexProcess(
+      mkdirSync(join(this.directory, 'owned'), {
+        recursive: true,
+        mode: 0o700,
+      });
+      const process = new OwnedProcess(
+        this.processDirectory(request.run),
+        request.run.owner,
         this.command,
         invocation(
           request,
@@ -405,15 +412,25 @@ export class CodexExecutor implements Executor {
       throw error;
     }
   }
+  private processDirectory(run: Run): string {
+    return join(this.directory, 'owned', `${run.id}-${run.owner}`);
+  }
+  private async recover(run: Run): Promise<'stopped' | 'unknown'> {
+    const directory = this.processDirectory(run);
+    if (!run.recoveryVersion && !existsSync(directory)) return 'unknown';
+    return stopOwned(directory, run.owner);
+  }
   async cancel(run: Run): Promise<'stopped' | 'unknown'> {
     const state = this.runs.get(run.id);
-    if (!state || state.owner !== run.owner) return 'unknown';
+    if (!state) return this.recover(run);
+    if (state.owner !== run.owner) return 'unknown';
     state.cancelled = true;
     return state.process ? state.process.stop() : 'stopped';
   }
   async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
     const state = this.runs.get(run.id);
-    if (!state || state.owner !== run.owner) return 'unknown';
+    if (!state) return this.recover(run);
+    if (state.owner !== run.owner) return 'unknown';
     return state.process
       ? state.process.status()
       : state.settled || state.cancelled

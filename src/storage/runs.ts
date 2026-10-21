@@ -69,6 +69,7 @@ export class Runs {
         attempt: task.runsUsed + 1,
         profile: task.config.profiles[role],
         executorVersion,
+        recoveryVersion: 1,
         evidence: {
           requirementVersion: task.requirementVersion,
           codeRevision: task.codeRevision,

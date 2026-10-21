@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
@@ -93,7 +96,7 @@ for (const [name, code, limit] of [
     assert.equal(f.verifier.accepted(f.task), false);
     assert.ok(report.checks.length);
   });
-test('cancel before verification prevents a late launch and a new verifier cannot guess stop', async (t) => {
+test('cancel before verification fences a late launch and survives verifier replacement', async (t) => {
   const f = await setup(
     t,
     "require('node:fs').writeFileSync('late.txt','bad')",
@@ -103,5 +106,33 @@ test('cancel before verification prevents a late launch and a new verifier canno
     f.verifier.run(f.task, f.run, f.workspace, f.revision),
     /already reserved/,
   );
-  assert.equal(new Verifier(f.manager).reconcile(f.run), 'unknown');
+  assert.equal(await new Verifier(f.manager).reconcile(f.run), 'stopped');
+});
+
+test('restarted verifier stops an in-flight trusted process before releasing ownership', async (t) => {
+  const f = await setup(
+    t,
+    "setInterval(()=>require('node:fs').appendFileSync('value.txt','x'),25)",
+    15000,
+  );
+  const pending = f.verifier.run(f.task, f.run, f.workspace, f.revision).then(
+    (r) => r,
+    (e) => e,
+  );
+  const path = join(f.workspace.path, 'value.txt');
+  for (
+    let i = 0;
+    i < 200 && (!existsSync(path) || !readFileSync(path, 'utf8').includes('x'));
+    i++
+  )
+    await delay(25);
+  assert.match(readFileSync(path, 'utf8'), /x/);
+  assert.equal(await new Verifier(f.manager).reconcile(f.run), 'stopped');
+  const before = readFileSync(path, 'utf8');
+  await delay(150);
+  assert.equal(readFileSync(path, 'utf8'), before);
+  const result = await pending;
+  assert.ok(result instanceof Error || result.status !== 'passed');
+  assert.equal(f.verifier.accepted(f.task), false);
+  assert.equal(f.runs.outstanding().length, 1);
 });
