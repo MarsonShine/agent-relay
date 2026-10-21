@@ -99,7 +99,7 @@ export class GitWorktrees {
     if (!exit.stopped || exit.code !== 0 || exit.reason)
       throw new RelayError(
         'storage',
-        `Git worktree failed (${operation}); inspect recorded intent`,
+        `Git worktree failed (${operation}; exit=${exit.code}; stopped=${exit.stopped}; reason=${exit.reason ?? 'none'}); inspect recorded intent`,
       );
   }
   async reconcile(workspace: Workspace): Promise<'stopped' | 'unknown'> {
