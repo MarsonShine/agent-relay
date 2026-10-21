@@ -130,6 +130,12 @@ export function prompt(request: ExecutionRequest): string {
       resultSchema: jsonSchemaFor(request),
       role: request.run.profile.role,
       stage: request.task.stage,
+      invocationGoal:
+        request.task.stage === 'triage'
+          ? 'This invocation performs read-only triage only: inspect relevant context, classify the task, define acceptance criteria and allowed scope, and ask a genuine unresolved question if needed. Once requirements are clear, return the triage handoff with completed. Do not implement or commit in triage. Read-only permission is intentional and does not block triage; a separate later implementation invocation receives workspace-write permission.'
+          : request.task.stage === 'implement'
+            ? 'Implement the current approved scope, respond to every pending finding, and produce the required committed candidate or bounded evidence-backed dispute. Do not perform independent approval of your own work.'
+            : 'Perform only the current read-only design, review, or answer stage. Do not edit code or create implementation commits; hand work to the next stage through the requested result schema.',
       input: request.task.input,
       evidence: request.run.evidence,
       decisions: request.decisions.map(

@@ -170,6 +170,16 @@ test('development output is a current-stage object, independent of the design ro
     scope: [],
     simpleReason: null,
   };
+  const triagePrompt = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(triagePrompt.invocationGoal, /read-only triage only/);
+  assert.match(
+    triagePrompt.invocationGoal,
+    /Do not implement or commit in triage/,
+  );
+  assert.match(
+    triagePrompt.invocationGoal,
+    /separate later implementation invocation/,
+  );
   assert.equal(
     JSON.parse(parseFinal(request, { ...base, output }).output!).stage,
     'triage',
