@@ -16,11 +16,16 @@ export interface Transport {
   ): Promise<Reply>;
 }
 export class GitHubError extends Error {
+  readonly rateLimited: boolean;
   readonly status: number;
   readonly retryAt: number;
   constructor(reply: Reply) {
     super(`GitHub HTTP ${reply.status}`);
     this.status = reply.status;
+    this.rateLimited =
+      reply.status === 429 ||
+      reply.headers['x-ratelimit-remaining'] === '0' ||
+      !!reply.headers['retry-after'];
     this.retryAt = Math.max(
       Date.now() +
         Math.max(60000, Number(reply.headers['retry-after'] ?? 0) * 1000),

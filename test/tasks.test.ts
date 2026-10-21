@@ -126,7 +126,7 @@ test('older task database migrates without losing task and event history', (t) =
   const { tasks, db, path } = fixture(t);
   const task = tasks.create(request());
   db.sql.exec(
-    'DROP TABLE delivery_intents; DROP TABLE deliveries; DROP TABLE github_sources; DROP TABLE requirement_history; DROP TABLE question_history; DROP TABLE execution_intents; DROP TABLE validations; DROP TABLE handoffs; DROP TABLE workspace_access; DROP TABLE workspaces; DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1',
+    'DROP TABLE github_cache; DROP TABLE github_ci; DROP TABLE github_inbox; DROP TABLE github_own_events; DROP TABLE delivery_intents; DROP TABLE deliveries; DROP TABLE github_sources; DROP TABLE requirement_history; DROP TABLE question_history; DROP TABLE execution_intents; DROP TABLE validations; DROP TABLE handoffs; DROP TABLE workspace_access; DROP TABLE workspaces; DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1',
   );
   const migrated = new Database(path);
   try {
@@ -134,7 +134,7 @@ test('older task database migrates without losing task and event history', (t) =
     assert.equal(new Tasks(migrated).events(task.id).length, 1);
     assert.equal(
       migrated.sql.prepare('PRAGMA user_version').get()?.user_version,
-      10,
+      11,
     );
     assert.ok(
       migrated.sql
