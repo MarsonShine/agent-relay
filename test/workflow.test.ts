@@ -136,6 +136,31 @@ test('wrong stage and fabricated source cannot become accepted role results', as
       },
     ],
   );
+  const retry = await g.workflow.executionContext(g.tasks.get(g.task.id));
+  assert.deepEqual(retry.rejectedDiagnostics?.[0]?.issues, [
+    'value.txt:1: excerpt mismatch',
+  ]);
+  assert.ok(!JSON.stringify(retry.rejectedDiagnostics).includes('baseline'));
+});
+
+test('unavailable rejected sources remain actionable retry context without becoming accepted', async (t) => {
+  const f = setup(t);
+  f.backend.output = (r) =>
+    r.task.stage === 'triage'
+      ? triage
+      : ({
+          ...answer,
+          sources: [{ path: 'missing.txt', line: 1, excerpt: 'missing' }],
+        } as Handoff);
+  await f.step();
+  const task = await f.step();
+  assert.equal(task.status, 'blocked');
+  assert.match(task.diagnostic!, /missing.txt:1/);
+  const context = await f.workflow.executionContext(task);
+  assert.deepEqual(context.rejectedDiagnostics?.[0]?.issues, [
+    'missing.txt:1: source unavailable',
+  ]);
+  assert.equal(context.history.length, 1);
 });
 test('design approval must bind the candidate and cover every criterion before implementation', async (t) => {
   const f = setup(t);
@@ -367,3 +392,56 @@ test('design summaries and response claims do not manufacture progress after reo
   await restarted.tick();
   assert.equal(f.backend.calls.length, 4);
 });
+
+for (const reason of ['cancel', 'timeout'])
+  test(`delayed source context cannot launch a backend after ${reason}`, async (t) => {
+    const f = setup(t);
+    if (reason === 'timeout') {
+      const task = f.tasks.get(f.task.id);
+      f.db.transaction(() =>
+        f.tasks.save(task, {
+          ...task,
+          config: {
+            ...task.config,
+            profiles: {
+              ...task.config.profiles,
+              design: { ...task.config.profiles.design, timeoutMs: 30 },
+            },
+          },
+        }),
+      );
+    }
+    let release!: () => void, arrived!: () => void;
+    const ready = new Promise<void>((r) => {
+      arrived = r;
+    });
+    const context = f.workflow.executionContext.bind(f.workflow);
+    f.workflow.executionContext = async (task) => {
+      arrived();
+      await new Promise<void>((r) => {
+        release = r;
+      });
+      return context(task);
+    };
+    f.backend.output = () => triage;
+    await f.controller.tick();
+    await ready;
+    if (reason === 'cancel') {
+      f.tasks.command(f.task.id, {
+        action: 'cancel',
+        expectedVersion: f.tasks.get(f.task.id).version,
+      });
+      await f.controller.tick();
+    }
+    await f.controller.wait();
+    assert.equal(
+      f.tasks.get(f.task.id).status,
+      reason === 'cancel' ? 'cancelled' : 'blocked',
+    );
+    release();
+    await new Promise<void>((r) => setImmediate(r));
+    assert.equal(f.backend.calls.length, 0);
+    assert.ok(
+      f.controller.runs.forTask(f.task.id).every((r) => r.status === 'stopped'),
+    );
+  });

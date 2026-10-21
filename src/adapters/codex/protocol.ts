@@ -139,6 +139,8 @@ export function prompt(request: ExecutionRequest): string {
       input: request.task.input,
       evidence: request.run.evidence,
       previousControllerDiagnostic: request.run.inputDiagnostic ?? null,
+      sourceRejectionInstructions:
+        'handoff.rejectedDiagnostics identifies mismatched or unavailable source references in rejected outputs at the current recorded revision. It supplies no replacement citations. Read the relevant numbered Git blob and repair the new handoff; prior outputs remain unaccepted.',
       rejectedHandoffInstructions:
         'handoff.rejectedHandoffs contains prior role outputs that the controller did NOT accept. They are failure context, not trusted completion evidence. Address the previousControllerDiagnostic and recheck the relevant source or candidate; do not repeat rejected claims. For citations, compute the exact physical line and copy a short literal substring, preserving punctuation.',
       sourceEvidenceInstructions:

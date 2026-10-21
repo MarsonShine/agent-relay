@@ -257,6 +257,55 @@ export class LocalWorkflow {
       throw new RelayError('invalid', 'handoff context limit exceeded');
     return result;
   }
+  private async sourceIssues(
+    task: Task,
+    result: Handoff,
+    cache = new Map<string, string[]>(),
+  ): Promise<string[]> {
+    const sources =
+      result.stage === 'design'
+        ? result.evidence
+        : result.stage === 'answer'
+          ? result.sources
+          : [];
+    const issues: string[] = [];
+    for (const source of sources) {
+      let lines = cache.get(source.path);
+      if (!lines) {
+        try {
+          lines = (
+            await this.workspaces.git.command(task.repo, [
+              'show',
+              `${task.codeRevision}:${source.path}`,
+            ])
+          ).split(/\r?\n/);
+          cache.set(source.path, lines);
+        } catch {
+          issues.push(`${source.path}:${source.line}: source unavailable`);
+          continue;
+        }
+      }
+      if (!lines[source.line - 1]?.includes(source.excerpt))
+        issues.push(`${source.path}:${source.line}: excerpt mismatch`);
+    }
+    return issues;
+  }
+  async executionContext(
+    task: Task,
+  ): Promise<NonNullable<ExecutionRequest['handoff']>> {
+    const context = this.context(task),
+      cache = new Map<string, string[]>();
+    const rejectedDiagnostics = [];
+    for (const rejected of context.rejectedHandoffs ?? [])
+      rejectedDiagnostics.push({
+        runId: rejected.runId,
+        issues: await this.sourceIssues(task, rejected.result, cache),
+      });
+    const result = { ...context, rejectedDiagnostics };
+    if (Buffer.byteLength(JSON.stringify(result)) > 1024 * 1024)
+      throw new RelayError('invalid', 'handoff context limit exceeded');
+    return result;
+  }
   async complete(task: Task, run: Run, artifactId: string): Promise<Advance> {
     const result = handoffSchema.parse(
       JSON.parse(this.evidence.read(artifactId)),
@@ -357,20 +406,12 @@ export class LocalWorkflow {
             ? 'implement'
             : 'design';
     } else if (result.stage === 'answer' || result.stage === 'design') {
-      for (const source of result.stage === 'answer'
-        ? result.sources
-        : result.evidence) {
-        const content = await this.workspaces.git.command(task.repo, [
-          'show',
-          `${task.codeRevision}:${source.path}`,
-        ]);
-        const lines = content.split(/\r?\n/);
-        if (!lines[source.line - 1]?.includes(source.excerpt))
-          throw new RelayError(
-            'invalid',
-            'source excerpt does not match the recorded revision',
-          );
-      }
+      const issues = await this.sourceIssues(task, result);
+      if (issues.length)
+        throw new RelayError(
+          'invalid',
+          `source excerpt does not match the recorded revision: ${issues.join('; ').slice(0, 7800)}`,
+        );
       stage = result.stage === 'answer' ? 'answer' : 'design_review';
       if (result.stage === 'answer') status = 'succeeded';
     } else if (result.stage === 'implement') {
