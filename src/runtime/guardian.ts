@@ -29,7 +29,9 @@ if (cancelled() || Date.now() >= request.deadlineAt) {
     owner: request.owner,
     code: null,
     stopped: true,
-    reason: 'launch fenced or deadline exhausted',
+    reason: cancelled()
+      ? 'cancelled before launch'
+      : 'execution timeout before launch',
   });
 } else {
   const child = new BoundedProcess(request.command, request.args, {

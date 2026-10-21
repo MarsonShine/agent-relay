@@ -101,3 +101,32 @@ test('launch fence prevents delayed launch; missing or malformed owner proof sta
   });
   assert.equal(await stopOwned(unknown, owner), 'unknown');
 });
+
+test('guardian startup consumes the deadline and reports timeout without launching the command', async (t) => {
+  const f = fixture(t),
+    directory = join(f.directory, 'expired'),
+    owner = randomUUID(),
+    effect = join(f.directory, 'must-not-exist');
+  const child = new OwnedProcess(
+    directory,
+    owner,
+    { executable: process.execPath },
+    [
+      '-e',
+      `require('node:fs').writeFileSync(${JSON.stringify(effect)},'unexpected')`,
+    ],
+    {
+      cwd: f.directory,
+      env: process.env,
+      input: '',
+      timeoutMs: 1,
+      maxBytes: 4096,
+      stdout: () => {},
+      stderr: () => {},
+    },
+  );
+  const exit = await child.done;
+  assert.equal(exit.stopped, true);
+  assert.match(exit.reason!, /timeout/);
+  assert.equal(existsSync(effect), false);
+});
