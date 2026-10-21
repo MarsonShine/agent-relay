@@ -59,6 +59,8 @@ const migrations = [
     task_id TEXT PRIMARY KEY REFERENCES tasks(id), request_key TEXT NOT NULL UNIQUE,
     document TEXT NOT NULL CHECK(json_valid(document))
   ) STRICT;`,
+  `CREATE TABLE deliveries (task_id TEXT PRIMARY KEY REFERENCES tasks(id), document TEXT NOT NULL CHECK(json_valid(document))) STRICT;
+  CREATE TABLE delivery_intents (operation_key TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), document TEXT NOT NULL CHECK(json_valid(document))) STRICT;`,
 ];
 
 export class Database {

@@ -46,6 +46,46 @@ export class LocalWorkflow {
         ? 'review'
         : 'design';
   }
+  async acceptance(task: Task): Promise<string[]> {
+    const issues = this.evidence.diagnose(task.id);
+    if (task.status !== 'succeeded')
+      issues.push('local workflow has not succeeded');
+    if (task.stage !== 'deliver') issues.push('task is not a code delivery');
+    if (
+      new Runs(this.workspaces.tasks)
+        .forTask(task.id)
+        .some((r) => r.status !== 'stopped') ||
+      this.workspaces.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id)
+    )
+      issues.push('execution ownership is not released');
+    try {
+      const history = this.history(task),
+        review = history.at(-1)?.result;
+      if (
+        review?.stage !== 'code_review' ||
+        review.verdict !== 'approve' ||
+        this.pending(task, history).length ||
+        !this.verifier.accepted(task)
+      )
+        issues.push(
+          'current candidate lacks complete independent review and trusted validation',
+        );
+      const workspace = this.workspaces
+        .list(task.id)
+        .find((w) => w.kind === 'implementation');
+      if (
+        !workspace ||
+        (await this.workspaces.git.verify(workspace, true)) !==
+          task.codeRevision
+      )
+        issues.push('delivered workspace changed');
+    } catch {
+      issues.push('local delivery evidence cannot be verified');
+    }
+    return issues;
+  }
   history(task: Task): HandoffRecord[] {
     return this.workspaces.tasks.db.sql
       .prepare('SELECT document FROM handoffs WHERE task_id=? ORDER BY rowid')

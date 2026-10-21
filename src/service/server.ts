@@ -260,20 +260,11 @@ export async function startService(options: {
             task.stage === 'deliver' &&
             task.status === 'succeeded'
           ) {
-            if (!workflow?.verifier.accepted(task))
-              issues.push('current candidate lacks intact trusted validation');
-            try {
-              const w = workspaces
-                ?.list(task.id)
-                .find((w) => w.kind === 'implementation');
-              if (
-                !w ||
-                (await workspaces!.git.verify(w, true)) !== task.codeRevision
-              )
-                issues.push('delivered workspace changed');
-            } catch {
-              issues.push('delivered workspace cannot be verified');
-            }
+            issues.push(
+              ...(workflow
+                ? await workflow.acceptance(task)
+                : ['development workflow unavailable']),
+            );
           }
           send(response, 200, {
             task,
