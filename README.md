@@ -2,7 +2,7 @@
 
 Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它将需求调查、设计、实现、独立审查和反馈修复组织为可恢复、有验收依据的工作流。
 
-**当前状态：M2 本地开发闭环及真实试点验收已通过。** 默认服务仍使用模拟执行器；显式配置开发运行时后可使用 Codex CLI 进行版本化角色交接、隔离实现、可信验证和有界审查修复。真实运行当前仅开放已验证的 Windows 平台；Linux 保留模拟及跨平台回归。验收证据与能力边界见 [M2 契约与验收](docs/m2.md)。
+**当前状态：M2 本地研发闭环已验收；M3 持续协作与恢复能力已实现。** M3 提供需求/问题历史、受控进程跨服务停止核对、持久预算和副作用意图。默认服务仍使用模拟执行器；显式开发运行时使用 Codex CLI。真实运行仍限定 Windows；Linux 保留跨平台确定性回归。M3 真实业务候选尚未最终验收，已验证范围及剩余条件见 [M3 契约](docs/m3.md)；历史试点见 [M2 验收](docs/m2.md)。
 
 ## 产品边界
 
@@ -44,13 +44,14 @@ node dist/cli.js task pause <task-id> --version <version> --data-dir .agent-rela
 node dist/cli.js task resume <task-id> --version <version> --data-dir .agent-relay/runtime
 node dist/cli.js task cancel <task-id> --version <version> --data-dir .agent-relay/runtime
 node dist/cli.js task answer <task-id> --version <version> --question <question-id> --question-version <question-version> --input <answer-file> --data-dir .agent-relay/runtime
+node dist/cli.js task revise <task-id> --version <version> --requirement-version <requirement-version> --input <requirement-file> --data-dir .agent-relay/runtime
 ```
 
-answer 的问题标识来自 status 中的 `task.question`。收到版本冲突时重新读状态，不盲目重发旧决定。活动任务的 pause/cancel 先进入 recovering，确认停止后才变为 paused/cancelled。服务终端按 Ctrl+C 会尝试暂停活动任务并关闭。
+answer 的问题标识来自 status 中的 `task.question`。revise 仅在执行已停止时替换需求，保存历史并重新 triage；暂停任务保持暂停。两种操作都不重置预算。收到版本冲突时重新读状态，不盲目重发旧决定。活动任务的 pause/cancel 先进入 recovering，确认停止后才变为 paused/cancelled。服务终端按 Ctrl+C 会尝试暂停活动任务并关闭。
 
 配置样例见 [examples/m1.config.json](examples/m1.config.json)。复制到私有运行目录后，用 `serve --config <file>` 加载；所有未知字段和未支持能力都会被拒绝。修改 `profiles.design.native.scenario` 为 `input` 可演示待答复，为 `slow` 可演示暂停或取消；默认 `success` 会快速完成。配置仅作用于新任务，已有任务保留创建时快照。M1 使用 design 角色执行单阶段模拟，完整角色交接属于 M2。
 
-默认模拟限额：每任务最多 4 次运行、总时限 60 秒、单次 5 秒、租约 5 秒、每份日志或成果 256 KiB。总时限包含暂停和待答复时间，重启不重置；这些是模拟默认值，不是 Codex 的实测限额。
+默认模拟限额：每任务最多 4 次运行、总时限 60 秒、单次 5 秒、租约 5 秒、每份日志或成果 256 KiB。总时限包含暂停和待答复时间，重启不重置；这些是模拟默认值，不是 Codex 的实测限额。明确分类的已停止只读失败最多默认重试 2 次基础设施错误，格式修复消耗任务迭代额度；退避与计数落库，不从原生错误文本猜测可重试性。
 
 ## 显式开发运行时
 
@@ -72,12 +73,13 @@ node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config
 
 日志和成果在落盘前执行脱敏与大小检查；任务原文、决策、数据库仍是私有数据，不能上传运行目录。缺失或损坏的成果会显示在 `evidenceIssues` 中，且 `accepted` 为 false。
 
-服务重启不重领仍活动或停止状态未知的运行。M1 模拟器无法跨服务进程证明旧子进程已停止时，会保留 recovering 和占位；此时 resume 被拒绝。可靠进程身份核对及副作用恢复属于 M3。租约到期不代表停止，不能通过直接修改数据库或删除租约恢复写入。
+服务重启不重领仍活动或停止状态未知的运行。新 Codex、可信验证和 Git 工作树变更由独立守护进程保有子进程句柄；服务重启请求原所有者停止，全部停止证据成立后才释放占用。已完成的工作树副作用只确认现状，未知操作不重放。旧版未登记运行、模拟器或守护进程失联仍保持 recovering；此时 resume 被拒绝。仅支持前台工具，Linux 原生运行未启用。租约到期不代表停止，不能通过直接修改数据库或删除租约恢复写入。
 
 ## 文档导航
 
 | 文档 | 用途 |
 | --- | --- |
+| [M3 持续协作与恢复](docs/m3.md) | 需求历史、进程所有权、预算、意图和验证限制 |
 | [M2 当前进度与契约](docs/m2.md) | Codex 适配器、生命周期与后续闭环边界 |
 | [M1 控制内核契约与验收](docs/m1.md) | 已实现边界、运行协议和版本化验收证据 |
 | [M0 实验结果](docs/m0/README.md) | Codex 真实接入证据、复现与阻塞项 |
