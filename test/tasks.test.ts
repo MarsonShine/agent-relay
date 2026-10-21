@@ -147,3 +147,56 @@ test('older task database migrates without losing task and event history', (t) =
     migrated.close();
   }
 });
+
+test('requirement replacement is idle-only, versioned and preserves consumed budget on reopen', (t) => {
+  const { tasks, db, path } = fixture(t);
+  const original = tasks.create({ ...request(), kind: 'development' });
+  const paused = db.transaction(() =>
+    tasks.save(original, {
+      ...original,
+      status: 'paused',
+      stage: 'implement',
+      runsUsed: 3,
+      iterationsUsed: 2,
+    }),
+  );
+  const command = {
+    action: 'revise' as const,
+    expectedVersion: paused.version,
+    requirementVersion: 1,
+    input: 'Replacement requirements',
+  };
+  assert.throws(
+    () => tasks.command(original.id, { ...command, requirementVersion: 2 }),
+    /current version/,
+  );
+  const revised = tasks.command(original.id, command);
+  assert.equal(revised.status, 'paused');
+  assert.equal(revised.stage, 'triage');
+  assert.equal(revised.requirementVersion, 2);
+  assert.equal(revised.deadlineAt, original.deadlineAt);
+  assert.equal(revised.runsUsed, 3);
+  assert.equal(revised.iterationsUsed, 2);
+  const reopened = new Database(path);
+  try {
+    const other = new Tasks(reopened);
+    assert.deepEqual(other.get(original.id), revised);
+    assert.equal(other.decisions(original.id)[0]?.answer, command.input);
+    assert.throws(() => other.command(original.id, command), /version changed/);
+    const running = db.transaction(() => {
+      const queued = tasks.save(revised, { ...revised, status: 'queued' });
+      return tasks.save(queued, { ...queued, status: 'running' });
+    });
+    assert.throws(
+      () =>
+        other.command(original.id, {
+          ...command,
+          expectedVersion: running.version,
+          requirementVersion: 2,
+        }),
+      /confirmed idle/,
+    );
+  } finally {
+    reopened.close();
+  }
+});

@@ -139,6 +139,12 @@ export const createTaskSchema = z.strictObject({
 export type CreateTask = z.infer<typeof createTaskSchema>;
 export const commandSchema = z.discriminatedUnion('action', [
   z.strictObject({
+    action: z.literal('revise'),
+    expectedVersion: versionSchema,
+    requirementVersion: versionSchema,
+    input: z.string().min(1).max(32_768),
+  }),
+  z.strictObject({
     action: z.enum(['pause', 'resume', 'cancel']),
     expectedVersion: versionSchema,
   }),
