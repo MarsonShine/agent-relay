@@ -49,3 +49,23 @@ test('superseded requirement, cancellation and missing publish authority fence d
     /publish permission/,
   );
 });
+test('accepted unchanged-candidate dispute restores watching using settled receipts without resetting limits', async (t) => {
+  const f = await deliveryFixture(t),
+    intent = f.deliveries.prepare(f.task, 'a'.repeat(40));
+  f.deliveries.saveIntent({
+    ...intent,
+    push: 'settled',
+    pull: 'settled',
+    pr: 3,
+  });
+  f.deliveries.save({
+    ...f.deliveries.get(f.task.id)!,
+    status: 'waiting_local',
+    polls: 4,
+  });
+  assert.equal(f.deliveries.prepare(f.task, 'a'.repeat(40)).key, intent.key);
+  assert.equal(f.deliveries.get(f.task.id)?.status, 'watching');
+  assert.equal(f.deliveries.get(f.task.id)?.polls, 4);
+  f.deliveries.save({ ...f.deliveries.get(f.task.id)!, status: 'cancelled' });
+  assert.throws(() => f.deliveries.prepare(f.task, 'a'.repeat(40)), /terminal/);
+});

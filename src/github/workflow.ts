@@ -104,7 +104,10 @@ export class GitHubWorkflow {
         ...current,
         status:
           intent.push === 'settled' && intent.pull === 'settled'
-            ? 'watching'
+            ? intent.revision !== task.codeRevision ||
+              intent.requirementVersion !== task.requirementVersion
+              ? 'waiting_local'
+              : 'watching'
             : 'pending',
         diagnostic: null,
       });

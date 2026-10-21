@@ -127,6 +127,13 @@ export const decisionSchema = z.strictObject({
   question: questionSchema,
   answer: z.string().min(1).max(32_768),
   source: z.enum(['local-user', 'github-feedback', 'github-ci']),
+  obligation: z
+    .strictObject({
+      id: z.string().min(1).max(128),
+      origin: z.enum(['implementation', 'design']),
+      sourceKey: z.string().min(1).max(512),
+    })
+    .optional(),
   requirementVersion: versionSchema,
 });
 export type Decision = z.infer<typeof decisionSchema>;

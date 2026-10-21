@@ -145,7 +145,8 @@ export const handoffContextSchema = z.strictObject({
         id: z.string().max(64),
         origin: z.enum(['design', 'implementation']),
         description: text,
-        runId: z.uuid(),
+        runId: z.uuid().nullable(),
+        sourceKey: z.string().max(512).optional(),
       }),
     )
     .max(100)

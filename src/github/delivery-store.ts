@@ -125,10 +125,27 @@ export class Deliveries {
         );
       const old = previous ? this.intent(previous.current) : null;
       if (
+        previous &&
+        ['complete', 'cancelled', 'blocked'].includes(previous.status)
+      )
+        throw new RelayError(
+          'conflict',
+          'previous delivery is terminal or blocked',
+        );
+      if (
         old?.revision === task.codeRevision &&
         old.requirementVersion === task.requirementVersion
-      )
+      ) {
+        if (previous?.status === 'waiting_local') {
+          if (old.push !== 'settled' || old.pull !== 'settled')
+            throw new RelayError(
+              'conflict',
+              'unchanged candidate has unknown publication effects',
+            );
+          this.save({ ...previous, status: 'watching', diagnostic: null });
+        }
         return old;
+      }
       if (
         previous &&
         (['complete', 'cancelled', 'blocked'].includes(previous.status) ||

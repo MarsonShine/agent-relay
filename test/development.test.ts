@@ -141,7 +141,7 @@ test('protected development performs review repair and accepts only the newly va
                 ]
               : [],
           resolutions:
-            reviews === 1
+            reviews !== 2
               ? []
               : [
                   {
@@ -217,4 +217,35 @@ test('protected development performs review repair and accepts only the newly va
     ),
     0,
   );
+  assert.deepEqual(await workflow.acceptance(task), []);
+  f.db.sql
+    .prepare('INSERT INTO deliveries VALUES(?,?)')
+    .run(task.id, JSON.stringify({ status: 'watching' }));
+  const feedbackTask = f.db.transaction(() =>
+    f.tasks.feedbackInside(
+      task,
+      'implementation',
+      'The external complaint needs independent resolution even though original checks pass.',
+      'github-feedback',
+      'comment:controlled',
+    ),
+  );
+  const obligation = workflow.context(feedbackTask).pendingFindings![0]!;
+  assert.equal(obligation.sourceKey, 'comment:controlled');
+  assert.equal(obligation.runId, null);
+  // Exercise a reviewer who approves the unchanged old criteria and omits the new obligation.
+  f.db.transaction(() =>
+    f.tasks.save(feedbackTask, { ...feedbackTask, stage: 'code_review' }),
+  );
+  await controller.tick();
+  await controller.wait();
+  const omitted = f.tasks.get(task.id);
+  assert.notEqual(omitted.status, 'succeeded');
+  assert.equal(workflow.verifier.accepted(omitted), true);
+  assert.ok(
+    workflow
+      .context(omitted)
+      .pendingFindings!.some((p) => p.id === obligation.id),
+  );
+  assert.notDeepEqual(await workflow.acceptance(omitted), []);
 });

@@ -253,6 +253,7 @@ export class Tasks {
     kind: 'requirement' | 'implementation' | 'design',
     text: string,
     source: 'github-feedback' | 'github-ci',
+    sourceKey: string,
   ): Task {
     const delivery = this.db.sql
       .prepare('SELECT document FROM deliveries WHERE task_id=?')
@@ -276,10 +277,14 @@ export class Tasks {
         'conflict',
         'feedback requires idle accepted delivery within original budgets',
       );
+    const decisionId = randomUUID();
     const decision = decisionSchema.parse({
       schemaVersion: 1,
-      id: randomUUID(),
+      id: decisionId,
       taskId: task.id,
+      ...(kind === 'requirement'
+        ? {}
+        : { obligation: { id: `G-${decisionId}`, origin: kind, sourceKey } }),
       question: {
         id: randomUUID(),
         version: task.requirementVersion,

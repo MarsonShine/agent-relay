@@ -120,11 +120,25 @@ export class LocalWorkflow {
         id: string;
         origin: 'design' | 'implementation';
         description: string;
-        runId: string;
+        runId: string | null;
+        sourceKey?: string;
       }
     >();
     const accepted = new Set(history.map((h) => h.runId)),
       runs = new Runs(this.workspaces.tasks);
+    for (const decision of this.workspaces.tasks.decisions(task.id)) {
+      if (
+        decision.requirementVersion === task.requirementVersion &&
+        decision.obligation
+      )
+        pending.set(decision.obligation.id, {
+          id: decision.obligation.id,
+          origin: decision.obligation.origin,
+          description: decision.answer,
+          runId: null,
+          sourceKey: decision.obligation.sourceKey,
+        });
+    }
     for (const artifact of this.evidence.list(task.id)) {
       if (
         artifact.kind !== 'result' ||
