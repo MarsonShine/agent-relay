@@ -256,3 +256,25 @@ test('native implementation handoff distinguishes unfinished work from retained 
     'actual unfinished work',
   ]);
 });
+
+test('source evidence schema and prompt state the existing exact physical-line contract', (t) => {
+  const { execution } = codexFixture(t);
+  const request = {
+    ...execution,
+    task: { ...execution.task, stage: 'design' as const },
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      resultSchema: {},
+      history: [],
+    },
+  };
+  const schema = JSON.stringify(jsonSchemaFor(request));
+  assert.match(schema, /One-based physical line number/);
+  assert.match(schema, /Verbatim substring of that exact single line/);
+  const body = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(
+    body.sourceEvidenceInstructions,
+    /including blank lines and headings/,
+  );
+  assert.match(body.sourceEvidenceInstructions, /Do not estimate line numbers/);
+});

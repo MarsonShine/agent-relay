@@ -15,9 +15,19 @@ export const relativeFile = z
   );
 const sha = z.string().regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/);
 const source = z.strictObject({
-  path: relativeFile,
-  line: z.number().int().positive(),
-  excerpt: text,
+  path: relativeFile.describe(
+    'Repository-relative file at the supplied evidence.codeRevision.',
+  ),
+  line: z
+    .number()
+    .int()
+    .positive()
+    .describe(
+      'One-based physical line number in that Git blob, counting headings and blank lines. Read numbered source; never estimate paragraph positions.',
+    ),
+  excerpt: text.describe(
+    'Verbatim substring of that exact single line in the recorded Git blob. Do not paraphrase or combine lines.',
+  ),
 });
 const responses = z
   .array(
