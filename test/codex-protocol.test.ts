@@ -284,3 +284,53 @@ test('source evidence schema and prompt state the existing exact physical-line c
   assert.equal(body.previousControllerDiagnostic, request.run.inputDiagnostic);
   assert.match(body.rejectedHandoffInstructions, /did NOT accept/);
 });
+
+test('native review schema pins the controller-selected subject without supplying a verdict', (t) => {
+  const { execution } = codexFixture(t);
+  const subject = '11111111-1111-4111-8111-111111111111';
+  const request = {
+    ...execution,
+    task: { ...execution.task, stage: 'code_review' as const },
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      resultSchema: {},
+      history: [],
+      reviewSubjectRunId: subject,
+    },
+  };
+  const output = {
+    stage: 'code_review',
+    subjectRunId: subject,
+    resolutions: [],
+    verdict: 'approve',
+    coverage: [{ criterionId: 'A1', proof: 'fixture review' }],
+    findings: [],
+  };
+  const result = {
+    schemaVersion: 1,
+    status: 'completed',
+    evidence: execution.run.evidence,
+    output,
+    question: null,
+    diagnostic: null,
+  };
+  assert.equal(
+    JSON.parse(parseFinal(request, result).output!).subjectRunId,
+    subject,
+  );
+  assert.throws(() =>
+    parseFinal(request, {
+      ...result,
+      output: { ...output, subjectRunId: execution.run.id },
+    }),
+  );
+  const body = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(
+    body.reviewInstructions,
+    /Triage defines the acceptance criteria but is not the review subject/,
+  );
+  assert.match(
+    JSON.stringify(jsonSchemaFor(request)),
+    /11111111-1111-4111-8111-111111111111/,
+  );
+});

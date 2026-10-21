@@ -192,6 +192,14 @@ test('design approval must bind the candidate and cover every criterion before i
   await f.step();
   assert.equal((await f.step()).status, 'blocked');
   assert.equal(f.backend.calls[2]!.run.profile.role, 'review');
+  assert.equal(
+    f.backend.calls[2]!.handoff!.reviewSubjectRunId,
+    f.backend.calls[1]!.run.id,
+  );
+  assert.notEqual(
+    f.backend.calls[2]!.handoff!.reviewSubjectRunId,
+    f.backend.calls[0]!.run.id,
+  );
   assert.equal(f.tasks.get(f.task.id).stage, 'design_review');
 });
 

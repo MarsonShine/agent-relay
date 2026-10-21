@@ -24,6 +24,7 @@ export function finalSchemaFor(request: ExecutionRequest) {
         output: stageHandoffSchema(
           request.task.stage,
           request.handoff?.implementationBaseRevision,
+          request.handoff?.reviewSubjectRunId,
         ).nullable(),
       })
     : finalSchema;
@@ -139,6 +140,12 @@ export function prompt(request: ExecutionRequest): string {
       input: request.task.input,
       evidence: request.run.evidence,
       previousControllerDiagnostic: request.run.inputDiagnostic ?? null,
+      ...(request.handoff?.reviewSubjectRunId
+        ? {
+            reviewInstructions:
+              'Review the accepted handoff.history entry identified by handoff.reviewSubjectRunId. Triage defines the acceptance criteria but is not the review subject. Evaluate the selected design or implementation, cover every criterion, and independently resolve all pending findings. The controller-supplied subject identifier does not imply approval.',
+          }
+        : {}),
       sourceRejectionInstructions:
         'handoff.rejectedDiagnostics identifies mismatched or unavailable source references in rejected outputs at the current recorded revision. It supplies no replacement citations. Read the relevant numbered Git blob and repair the new handoff; prior outputs remain unaccepted.',
       rejectedHandoffInstructions:

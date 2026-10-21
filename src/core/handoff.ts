@@ -123,6 +123,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
 export function stageHandoffSchema(
   stage: string,
   implementationBaseRevision?: string,
+  reviewSubjectRunId?: string,
 ) {
   const schema = handoffSchema.options.find(
     (s) => s.shape.stage.safeParse(stage).success,
@@ -133,6 +134,15 @@ export function stageHandoffSchema(
     stage: z.literal(stage),
     ...(stage === 'implement' && implementationBaseRevision
       ? { baseRevision: z.literal(implementationBaseRevision) }
+      : {}),
+    ...(['design_review', 'code_review'].includes(stage) && reviewSubjectRunId
+      ? {
+          subjectRunId: z
+            .literal(reviewSubjectRunId)
+            .describe(
+              'Controller-selected latest accepted design or implementation under review; triage is not the review subject.',
+            ),
+        }
       : {}),
   });
 }
@@ -149,6 +159,7 @@ export const handoffContextSchema = z.strictObject({
   contractVersion: z.literal('M2-handoff-v1'),
   allowedFiles: z.array(relativeFile).max(100).optional(),
   implementationBaseRevision: sha.optional(),
+  reviewSubjectRunId: z.uuid().optional(),
   pendingFindings: z
     .array(
       z.strictObject({

@@ -193,6 +193,20 @@ export class LocalWorkflow {
     const history = this.history(task),
       acceptedRuns = new Set(history.map((h) => h.runId));
     const runs = new Runs(this.workspaces.tasks);
+    const reviewSubject =
+      task.stage === 'design_review'
+        ? 'design'
+        : task.stage === 'code_review'
+          ? 'implement'
+          : null;
+    const reviewSubjectRunId = reviewSubject
+      ? history.findLast((h) => h.result.stage === reviewSubject)?.runId
+      : undefined;
+    if (reviewSubject && !reviewSubjectRunId)
+      throw new RelayError(
+        'conflict',
+        'review requires an accepted subject handoff',
+      );
     const rejectedHandoffs: HandoffRecord[] = [];
     for (const artifact of this.evidence.list(task.id)) {
       if (
@@ -222,6 +236,7 @@ export class LocalWorkflow {
     }
     const result = {
       contractVersion: 'M2-handoff-v1' as const,
+      ...(reviewSubjectRunId ? { reviewSubjectRunId } : {}),
       ...(this.implementationBase(task)
         ? { implementationBaseRevision: this.implementationBase(task)! }
         : {}),
@@ -229,7 +244,11 @@ export class LocalWorkflow {
         ? { allowedFiles: task.config.allowedFiles }
         : {}),
       resultSchema: z.toJSONSchema(
-        stageHandoffSchema(task.stage, this.implementationBase(task)),
+        stageHandoffSchema(
+          task.stage,
+          this.implementationBase(task),
+          reviewSubjectRunId,
+        ),
         {
           target: 'draft-7',
         },
