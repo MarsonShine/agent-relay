@@ -7,6 +7,7 @@ import { readToken } from '../src/service/local.ts';
 import type { Config } from '../src/core/config.ts';
 import { workspaceFixture, git } from './workspace-helpers.ts';
 import { isolatedPermissions } from '../src/adapters/codex/isolation.ts';
+import { policy } from './github-helpers.ts';
 
 test(
   process.platform === 'win32'
@@ -24,6 +25,7 @@ test(
     };
     const config: Config = {
       ...f.task.config,
+      github: policy,
       allowedFiles: ['value.txt'],
       profiles: {
         design: { ...profile, role: 'design', permission: 'read-only' },
@@ -53,6 +55,24 @@ test(
       directory,
       port: 0,
       autoSchedule: false,
+      githubTransport: {
+        async request(path: string) {
+          return {
+            status: 200,
+            headers: {},
+            body: path.includes('/issues/')
+              ? {
+                  id: 2,
+                  number: 1,
+                  title: 'Explain value',
+                  body: 'bounded consultation',
+                  state: 'open',
+                  updated_at: '2026-01-01',
+                }
+              : { id: 10, full_name: 'owner/project', archived: false },
+          };
+        },
+      },
       config,
       development: {
         repo: f.repo,
@@ -118,6 +138,27 @@ test(
       );
       assert.ok(invocation.args.includes('features.apps=false'));
       assert.equal(git(f.repo, 'status', '--porcelain'), '');
+      const imported = await call('/v1/github/import', {
+        schemaVersion: 1,
+        issue: 1,
+        requestKey: 'source',
+      });
+      assert.equal(imported.status, 200);
+      const importedValue = await imported.json();
+      assert.equal(importedValue.source.issueId, 2);
+      const rejected = await call(
+        `/v1/tasks/${importedValue.task.id}/delivery`,
+        {
+          schemaVersion: 1,
+          expectedVersion: importedValue.task.version,
+          action: 'publish',
+        },
+      );
+      assert.equal(
+        rejected.status,
+        409,
+        'unaccepted imported task must never publish',
+      );
     } finally {
       await service.close();
     }
