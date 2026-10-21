@@ -9,6 +9,7 @@ import {
   finalSchema,
   parseFinal,
   finalJsonSchema,
+  jsonSchemaFor,
 } from '../src/adapters/codex/protocol.ts';
 import {
   codexEnvironment,
@@ -179,4 +180,69 @@ test('development output is a current-stage object, independent of the design ro
   assert.throws(() =>
     parseFinal(request, { ...base, output: { ...output, stage: 'design' } }),
   );
+});
+
+test('native implementation handoff distinguishes unfinished work from retained review claims without rewriting results', (t) => {
+  const { execution } = codexFixture(t),
+    revision = 'a'.repeat(40);
+  const request = {
+    ...execution,
+    task: { ...execution.task, stage: 'implement' as const },
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      implementationBaseRevision: revision,
+      resultSchema: {},
+      history: [],
+      pendingFindings: [
+        {
+          id: 'U-retained',
+          origin: 'implementation' as const,
+          description: 'awaiting independent resolution',
+          runId: execution.run.id,
+        },
+      ],
+    },
+  };
+  const body = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.equal(body.handoff.pendingFindings[0].id, 'U-retained');
+  assert.match(body.outputInstructions, /stable U-\* claims/);
+  assert.match(body.outputInstructions, /unfinished IMPLEMENTATION WORK only/);
+  assert.match(
+    body.outputInstructions,
+    /exception also applies when input evidence equals implementationBaseRevision/,
+  );
+  assert.match(body.outputInstructions, /raw-byte-preserving/);
+  assert.ok(
+    !body.outputInstructions.includes('Otherwise create a clean commit'),
+  );
+  assert.match(
+    JSON.stringify(jsonSchemaFor(request)),
+    /Unfinished implementation work only/,
+  );
+  const output = {
+    stage: 'implement',
+    baseRevision: revision,
+    resultRevision: revision,
+    summary: 'dispute',
+    changedFiles: [],
+    responses: [
+      {
+        findingId: 'U-retained',
+        disposition: 'disputed',
+        proof: 'actual repository evidence',
+      },
+    ],
+    unresolved: ['actual unfinished work'],
+  };
+  const parsed = parseFinal(request, {
+    schemaVersion: 1,
+    status: 'completed',
+    evidence: execution.run.evidence,
+    output,
+    question: null,
+    diagnostic: null,
+  });
+  assert.deepEqual(JSON.parse(parsed.output!).unresolved, [
+    'actual unfinished work',
+  ]);
 });
