@@ -259,6 +259,8 @@ export async function startService(options: {
           }
           send(response, 200, {
             task,
+            requirements: tasks.requirements(id),
+            questions: tasks.questions(id),
             ...(workflow
               ? {
                   handoffs: workflow.history(task),

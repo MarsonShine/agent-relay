@@ -130,6 +130,18 @@ export const decisionSchema = z.strictObject({
   requirementVersion: versionSchema,
 });
 export type Decision = z.infer<typeof decisionSchema>;
+export const requirementRecordSchema = z.strictObject({
+  taskId: idSchema,
+  requirementVersion: versionSchema,
+  input: z.string().min(1).max(32768),
+  source: z.enum(['created', 'answer', 'revise', 'imported']),
+});
+export const questionRecordSchema = z.strictObject({
+  taskId: idSchema,
+  runId: idSchema.nullable(),
+  question: questionSchema,
+  evidence: evidenceSchema,
+});
 export const createTaskSchema = z.strictObject({
   kind: z.enum(['simulation', 'development']).optional(),
   schemaVersion: z.literal(1),

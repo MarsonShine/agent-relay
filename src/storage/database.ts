@@ -45,6 +45,16 @@ const migrations = [
     operation_key TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
     run_id TEXT NOT NULL REFERENCES runs(id), document TEXT NOT NULL CHECK(json_valid(document))
   ) STRICT;`,
+  `CREATE TABLE requirement_history (
+    task_id TEXT NOT NULL REFERENCES tasks(id), version INTEGER NOT NULL,
+    document TEXT NOT NULL CHECK(json_valid(document)), PRIMARY KEY(task_id,version)
+  ) STRICT;
+  INSERT INTO requirement_history SELECT id,json_extract(document,'$.requirementVersion'),
+    json_object('taskId',id,'requirementVersion',json_extract(document,'$.requirementVersion'),'input',json_extract(document,'$.input'),'source','imported') FROM tasks;
+  CREATE TABLE question_history (
+    task_id TEXT NOT NULL REFERENCES tasks(id), question_id TEXT NOT NULL, version INTEGER NOT NULL,
+    document TEXT NOT NULL CHECK(json_valid(document)), PRIMARY KEY(task_id,question_id,version)
+  ) STRICT;`,
 ];
 
 export class Database {

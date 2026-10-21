@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   commandSchema,
+  requirementRecordSchema,
+  questionRecordSchema,
   createTaskSchema,
   decisionSchema,
   eventSchema,
@@ -85,6 +87,7 @@ export class Tasks {
           'INSERT INTO tasks(id, request_key, fingerprint, document) VALUES(?,?,?,?)',
         )
         .run(task.id, input.requestKey, fingerprint, JSON.stringify(task));
+      this.recordRequirement(task, 'created');
       this.append(
         task.id,
         null,
@@ -127,6 +130,7 @@ export class Tasks {
         throw new RelayError('conflict', 'terminal tasks cannot be changed');
       let next: Task = { ...task };
       if (command.action === 'answer' || command.action === 'revise') {
+        this.recordQuestion(task, null);
         if (this.decisions(id).length >= 100)
           throw new RelayError('conflict', 'decision history limit reached');
       }
@@ -221,6 +225,8 @@ export class Tasks {
         next.control = null;
       }
       const saved = this.save(task, next);
+      if (command.action === 'answer' || command.action === 'revise')
+        this.recordRequirement(saved, command.action);
       this.append(
         id,
         null,
@@ -230,6 +236,59 @@ export class Tasks {
       );
       return saved;
     });
+  }
+  // History writes share the task/Run transition transaction.
+  private recordRequirement(
+    task: Task,
+    source: 'created' | 'answer' | 'revise',
+  ): void {
+    const record = requirementRecordSchema.parse({
+      taskId: task.id,
+      requirementVersion: task.requirementVersion,
+      input: task.input,
+      source,
+    });
+    this.db.sql
+      .prepare('INSERT INTO requirement_history VALUES(?,?,?)')
+      .run(task.id, task.requirementVersion, JSON.stringify(record));
+  }
+  recordQuestion(task: Task, runId: string | null): void {
+    if (!task.question) return;
+    const record = questionRecordSchema.parse({
+      taskId: task.id,
+      runId,
+      question: task.question,
+      evidence: {
+        requirementVersion: task.requirementVersion,
+        codeRevision: task.codeRevision,
+      },
+    });
+    this.db.sql
+      .prepare('INSERT OR IGNORE INTO question_history VALUES(?,?,?,?)')
+      .run(
+        task.id,
+        task.question.id,
+        task.question.version,
+        JSON.stringify(record),
+      );
+  }
+  requirements(id: string) {
+    return this.db.sql
+      .prepare(
+        'SELECT document FROM requirement_history WHERE task_id=? ORDER BY version',
+      )
+      .all(id)
+      .map((r) =>
+        requirementRecordSchema.parse(JSON.parse(String(r.document))),
+      );
+  }
+  questions(id: string) {
+    return this.db.sql
+      .prepare(
+        'SELECT document FROM question_history WHERE task_id=? ORDER BY rowid',
+      )
+      .all(id)
+      .map((r) => questionRecordSchema.parse(JSON.parse(String(r.document))));
   }
   append(
     taskId: string,

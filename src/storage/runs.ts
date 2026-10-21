@@ -224,6 +224,7 @@ export class Runs {
         diagnostic,
         question: status === 'waiting_user' ? outcome.question : null,
       });
+      this.tasks.recordQuestion(saved, run.id);
       this.tasks.append(
         task.id,
         run.id,
