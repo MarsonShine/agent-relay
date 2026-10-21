@@ -264,3 +264,68 @@ test('authorized new-file ancestors preserve ignored local policy and reject pat
     /repository-relative/,
   );
 });
+
+test('startup scan confirms completed Git side effects without replaying creation or removal', async (t) => {
+  const f = workspaceFixture(t);
+  class CrashGit extends GitWorktrees {
+    creates = 0;
+    removes = 0;
+    override async create(w: Workspace) {
+      this.creates++;
+      await super.create(w);
+      throw Error('after create');
+    }
+    override async remove(w: Workspace) {
+      this.removes++;
+      await super.remove(w);
+      throw Error('after remove');
+    }
+  }
+  const gitProcess = new CrashGit(),
+    first = new Workspaces(f.tasks, f.root, gitProcess);
+  await assert.rejects(
+    first.prepare(f.task.id, 'implementation'),
+    /after create/,
+  );
+  const restarted = new Workspaces(f.tasks, f.root, gitProcess);
+  await restarted.recover();
+  const workspace = restarted.list(f.task.id)[0]!;
+  assert.equal(workspace.state, 'ready');
+  assert.equal(gitProcess.creates, 1);
+  const task = f.tasks.get(f.task.id);
+  f.tasks.command(task.id, { action: 'cancel', expectedVersion: task.version });
+  await assert.rejects(restarted.remove(workspace.id), /after remove/);
+  assert.equal(restarted.get(workspace.id).state, 'removing');
+  await new Workspaces(f.tasks, f.root, gitProcess).recover();
+  assert.equal(restarted.get(workspace.id).state, 'removed');
+  assert.equal(gitProcess.removes, 1);
+});
+
+test('creation intent before spawn is fenced and never replayed by startup scan', async (t) => {
+  const f = workspaceFixture(t);
+  class BeforeSpawn extends GitWorktrees {
+    override async create() {
+      throw Error('before spawn');
+    }
+  }
+  const first = new Workspaces(f.tasks, f.root, new BeforeSpawn());
+  await assert.rejects(
+    first.prepare(f.task.id, 'implementation'),
+    /before spawn/,
+  );
+  const restarted = new Workspaces(f.tasks, f.root);
+  await restarted.recover();
+  const workspace = restarted.list(f.task.id)[0]!;
+  assert.equal(workspace.state, 'creating');
+  assert.equal(existsSync(workspace.path), false);
+  await assert.rejects(
+    restarted.prepare(f.task.id, 'implementation'),
+    /not be replayed/,
+  );
+  assert.equal((await restarted.git.listed(f.repo)).length, 1);
+  assert.ok(
+    f.tasks
+      .events(f.task.id)
+      .some((e) => e.type === 'workspace.recovery_pending'),
+  );
+});

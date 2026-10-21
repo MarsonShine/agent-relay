@@ -470,9 +470,17 @@ export class LocalWorkflow {
     };
   }
   async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
-    return this.verifier.reconcile(run);
+    const states = await Promise.all([
+      this.verifier.reconcile(run),
+      this.workspaces.stopPending(run.taskId),
+    ]);
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
   }
   async cancel(run: Run): Promise<'stopped' | 'unknown'> {
-    return this.verifier.cancel(run);
+    const states = await Promise.all([
+      this.verifier.cancel(run),
+      this.workspaces.stopPending(run.taskId),
+    ]);
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
   }
 }

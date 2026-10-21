@@ -89,6 +89,7 @@ export class Controller {
         if (state === 'stopped' && workflowState === 'stopped')
           this.runs.confirmStopped(run.id);
       }
+      await this.workflow?.workspaces.recover();
       const task = this.tasks
         .list('queued')
         .find((t) => t.retryAt <= Date.now() || t.deadlineAt <= Date.now());

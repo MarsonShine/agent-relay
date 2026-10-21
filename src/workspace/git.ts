@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { OwnedProcess, stopOwned } from '../runtime/owned-process.ts';
 import { checkLocalPolicies } from './policies.ts';
 import { execFile } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
@@ -8,6 +10,7 @@ import {
   sep,
   dirname,
   basename,
+  join,
 } from 'node:path';
 import { RelayError } from '../core/errors.ts';
 import { commitSchema } from './contracts.ts';
@@ -57,6 +60,63 @@ const policyPaths = [
   ':(glob)**/.agents/**',
 ];
 export class GitWorktrees {
+  recoveryRoot: string | undefined;
+  private async mutate(
+    workspace: Workspace,
+    operation: string,
+    args: string[],
+    timeoutMs = 30000,
+  ): Promise<void> {
+    if (!this.recoveryRoot)
+      throw new RelayError(
+        'invalid',
+        'Git mutation requires durable ownership',
+      );
+    mkdirSync(this.recoveryRoot, { recursive: true, mode: 0o700 });
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|HOME|APPDATA|LOCALAPPDATA|PROGRAMFILES|PROGRAMDATA|LANG|LC_ALL)$/i.test(
+          key,
+        ),
+      ),
+    );
+    const child = new OwnedProcess(
+      join(this.recoveryRoot, `${workspace.id}-${operation}`),
+      workspace.id,
+      { executable: 'git' },
+      ['--no-pager', '-C', workspace.repo, ...args],
+      {
+        cwd: workspace.repo,
+        env: { ...env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+        input: '',
+        timeoutMs,
+        maxBytes: 8 * 1024 * 1024,
+        stdout: () => {},
+        stderr: () => {},
+      },
+    );
+    const exit = await child.done;
+    if (!exit.stopped || exit.code !== 0 || exit.reason)
+      throw new RelayError(
+        'storage',
+        `Git worktree failed (${operation}); inspect recorded intent`,
+      );
+  }
+  async reconcile(workspace: Workspace): Promise<'stopped' | 'unknown'> {
+    if (!this.recoveryRoot || !workspace.recoveryVersion) return 'unknown';
+    const operations =
+      workspace.state === 'creating' ? ['create'] : ['unlock', 'remove'];
+    const states = await Promise.all(
+      operations.map((op) =>
+        stopOwned(
+          join(this.recoveryRoot!, `${workspace.id}-${op}`),
+          workspace.id,
+        ),
+      ),
+    );
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
+  }
+
   async command(
     repo: string,
     args: string[],
@@ -299,11 +359,10 @@ export class GitWorktrees {
     ];
     if (workspace.branch) args.push('-b', workspace.branch);
     else args.push('--detach');
-    await this.command(
-      workspace.repo,
+    await this.mutate(
+      workspace,
+      'create',
       [...args, workspace.path, workspace.revision],
-      '',
-      false,
       120000,
     );
   }
@@ -373,7 +432,15 @@ export class GitWorktrees {
   }
   async remove(workspace: Workspace): Promise<void> {
     await this.assertRemovable(workspace);
-    await this.command(workspace.repo, ['worktree', 'unlock', workspace.path]);
-    await this.command(workspace.repo, ['worktree', 'remove', workspace.path]);
+    await this.mutate(workspace, 'unlock', [
+      'worktree',
+      'unlock',
+      workspace.path,
+    ]);
+    await this.mutate(workspace, 'remove', [
+      'worktree',
+      'remove',
+      workspace.path,
+    ]);
   }
 }
