@@ -6,26 +6,36 @@
     "M2-feedback-v1",
     "M2-runtime-v1"
   ],
-  "codeRevision": "15f865b44b7249981557c71063c47065e60ce239",
-  "date": "2026-10-20",
+  "codeRevision": "91fad067bb746ae9ec0e1749a4a9c3d6defe046d",
+  "date": "2026-10-21",
   "implementationStatus": {
     "m23": "implemented",
     "m24": "implemented",
     "m25": "implemented",
-    "m26": "not accepted; waiting for explicit deadline extension and final application validation/review"
+    "m26": "accepted on Windows; application-owned checks and independent review passed"
   },
   "localChecks": {
     "command": "npm run check",
     "passed": 122,
     "failed": 0,
-    "skipped": 0
+    "skipped": 0,
+    "codeRevision": "15f865b44b7249981557c71063c47065e60ce239",
+    "followUp": {
+      "codeRevision": "91fad067bb746ae9ec0e1749a4a9c3d6defe046d",
+      "checks": [
+        "6 service tests including native path aliases",
+        "typecheck",
+        "format:check"
+      ],
+      "result": "passed"
+    }
   },
   "runtime": {
     "codexVersion": "0.163.0-alpha.10.2",
     "model": "gpt-6-luna",
     "platform": "win32",
     "modelCallLimit": 10,
-    "modelCallsUsed": 8,
+    "modelCallsUsed": 10,
     "perCallTimeoutMs": 180000,
     "checks": [
       {
@@ -78,6 +88,23 @@
         "kind": "pilot implementation",
         "outcome": "candidate produced, handoff rejected",
         "reason": "Commit existed but temporary test artifacts remained untracked and were reported unresolved. Artifacts were retained outside the code worktree; unresolved claims remain pending independent review."
+      },
+      {
+        "call": 9,
+        "kind": "pilot implementation confirmation",
+        "outcome": "accepted handoff and trusted validation",
+        "candidateUnchanged": true,
+        "unresolved": 0,
+        "priorUnresolvedResponses": 1
+      },
+      {
+        "call": 10,
+        "kind": "independent read-only code review",
+        "outcome": "accepted",
+        "verdict": "approve",
+        "acceptanceCriteriaCovered": 4,
+        "resolvedPriorClaims": 1,
+        "findings": 0
       }
     ],
     "nativeChecks": {
@@ -105,16 +132,94 @@
       "failed": 0,
       "skipped": 0
     },
-    "applicationAccepted": false,
-    "runsConsumed": 5,
+    "applicationAccepted": true,
+    "runsConsumed": 7,
     "iterationsConsumed": 0,
-    "modelCallsConsumed": 4,
+    "modelCallsConsumed": 6,
     "published": false,
     "merged": false,
-    "budgetState": "Original one-hour task deadline expired during investigation. No automatic extension or counter reset. Two authorized model calls remain; explicit extension requested."
+    "budgetState": "Original deadline expiry preserved. User authorized a 30-minute deadline extension from confirmation; no Run, iteration, or model-call counter reset. Total model-call budget exhausted at 10/10.",
+    "requirementVersion": 1,
+    "status": "succeeded",
+    "stage": "deliver",
+    "allRunsStopped": true,
+    "workspaceAccessReleased": true,
+    "evidenceIssues": [],
+    "sourceCheckoutUnchanged": true,
+    "candidateClean": true,
+    "acceptedAfterServiceReopen": true,
+    "deadlineExtension": {
+      "authorizedAt": "2026-10-21T01:10:44.923Z",
+      "grantMs": 1800000,
+      "countersBefore": {
+        "runs": 5,
+        "iterations": 0,
+        "modelCalls": 8
+      },
+      "countersAfter": {
+        "runs": 7,
+        "iterations": 0,
+        "modelCalls": 10
+      },
+      "limits": {
+        "runs": 7,
+        "iterations": 2,
+        "modelCalls": 10
+      }
+    },
+    "trustedValidation": {
+      "evidence": {
+        "requirementVersion": 1,
+        "codeRevision": "2b811fe9e29843b43380b1d5cc863decfc527524"
+      },
+      "status": "passed",
+      "stopped": true,
+      "policyHash": "0b09546b83be97f7f6c375f3dccc5eb6879e201f55f412f17931d804544a2367",
+      "environment": {
+        "platform": "win32",
+        "arch": "x64",
+        "os": "10.0.19045",
+        "node": "v26.8.2"
+      },
+      "checks": [
+        {
+          "id": "core-tests",
+          "version": 1,
+          "definitionHash": "6c453486ab25540d8f3e972df76f3372e2dac8e758f196633335bcccd4f334f9",
+          "exitCode": 0,
+          "stopped": true,
+          "logHash": "9aa8b0df3a86af006f127110448a4bbe9fe6c243db6468f6331644656bddac43",
+          "startedAt": 1792545210473,
+          "completedAt": 1792545219497
+        }
+      ],
+      "testCounts": {
+        "passed": 1069,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "independentReview": {
+      "evidence": {
+        "requirementVersion": 1,
+        "codeRevision": "2b811fe9e29843b43380b1d5cc863decfc527524"
+      },
+      "verdict": "approve",
+      "subjectMatchesAcceptedImplementation": true,
+      "criteria": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "resolvedPriorClaims": 1,
+      "findings": 0,
+      "resultArtifactSha256": "99f80b21067b1ee55cadf378a3e5ebbee61a525e34b7226f180d01c28ab9242a"
+    },
+    "feedbackCoverage": "Live feedback addressed the stopped implementation temporary-artifact and validation-environment claim, followed by trusted checks and independent resolution. No code defect was found in live review and no automatic repair iteration was consumed; review-revise/new-SHA repair is covered by deterministic M2.5 tests."
   },
   "limitations": [
-    "Final application-owned validation and independent resolution of prior unresolved claims are still required.",
+    "The live pilot required manual deadline extension and retained-artifact relocation; automatic recovery and infrastructure retry budgets remain M3 work.",
     "Native development service remains disabled outside Windows; Linux CI does not certify live Codex permissions.",
     "Live continuation on the new CLI version was not rerun; deterministic continuation checks pass, and the prior live evidence is version-bound to the earlier CLI.",
     "Windows elevated requires baseline root read; explicit denies protect controller/credential locations, not every possible host secret.",
@@ -126,7 +231,7 @@
       "windows-latest",
       "ubuntu-latest"
     ],
-    "result": "pending pushed-head verification",
+    "result": "passed",
     "priorRuns": [
       {
         "commit": "e79639fc354a62e7c76257386716f3c140d23a5a",
@@ -135,7 +240,21 @@
         "windows": "121 passed, 1 failed, 0 skipped",
         "cause": "Task registration used synchronous JavaScript realpath while registry identity used native realpath; Windows short-path aliases mismatched. A local alias regression reproduced the failure before unifying canonicalization."
       }
-    ]
+    ],
+    "commit": "91fad067bb746ae9ec0e1749a4a9c3d6defe046d",
+    "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39416164846",
+    "checks": {
+      "linux": {
+        "passed": 123,
+        "failed": 0,
+        "skipped": 0
+      },
+      "windows": {
+        "passed": 123,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
   },
   "slices": [
     {
@@ -165,6 +284,10 @@
     {
       "commit": "15f865b",
       "scope": "explicit registered development service and CLI"
+    },
+    {
+      "commit": "91fad06",
+      "scope": "native repository alias canonicalization and Windows regression"
     }
   ]
 }
