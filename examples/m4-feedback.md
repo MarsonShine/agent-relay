@@ -20,6 +20,8 @@ Check status for delivery state, CI, and inbox. The service watches only within 
 
 Comments cannot change trusted commands, models, permissions, or budgets. When the bounded feedback window is ready to close, complete delivery explicitly:
 
+Requirement feedback raises the requirement version and returns the task to triage; implementation or design feedback keeps the version and returns to its corresponding stage.
+
 ```text
 node dist/cli.js task complete-delivery <task-id> --version <task-version> --data-dir <private-data-dir>
 ```
