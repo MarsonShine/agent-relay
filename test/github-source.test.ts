@@ -56,6 +56,24 @@ test('import freezes untrusted text and policy atomically; replay preserves snap
     task.id,
   );
   assert.equal(calls, 2);
+  tasks.create({
+    schemaVersion: 1,
+    kind: 'development',
+    requestKey: 'local-collision',
+    repo: task.repo,
+    input: task.input,
+    codeRevision: task.codeRevision,
+    config: task.config,
+  });
+  await assert.rejects(
+    sources.import(
+      { ...input, requestKey: 'local-collision' },
+      task.repo,
+      task.codeRevision!,
+      config,
+    ),
+    /cannot reuse/,
+  );
   await assert.rejects(
     sources.import({ ...input, issue: 2 }, 'fixture', 'a'.repeat(40), config),
     /conflicts/,
@@ -67,7 +85,7 @@ test('import freezes untrusted text and policy atomically; replay preserves snap
       }),
     /receipt failed/,
   );
-  assert.equal(db.sql.prepare('SELECT count(*) AS n FROM tasks').get()?.n, 1);
+  assert.equal(db.sql.prepare('SELECT count(*) AS n FROM tasks').get()?.n, 2);
 });
 test('untrusted routing fields, empty checks and repository transfers fail closed', async (t) => {
   assert.equal(

@@ -59,6 +59,11 @@ export class Tasks {
         .prepare('SELECT id, fingerprint FROM tasks WHERE request_key=?')
         .get(input.requestKey);
       if (existing) {
+        if (persist)
+          throw new RelayError(
+            'conflict',
+            'atomic source creation cannot reuse an existing task',
+          );
         if (existing.fingerprint !== fingerprint)
           throw new RelayError(
             'conflict',
