@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { GitHubApi, pullSchema } from './api.ts';
 import { Deliveries } from './delivery-store.ts';
 import type { Delivery, DeliveryIntent } from './delivery-store.ts';
-import { GitHubError, successful } from './transport.ts';
+import { GitHubError, successful, seconds } from './transport.ts';
+import { codeFailures } from './diagnostics.ts';
 import type { Reply, Transport } from './transport.ts';
 import { repository } from './source.ts';
 import { RelayError } from '../core/errors.ts';
@@ -38,6 +39,7 @@ export function classifyCI(
   statuses: unknown[],
   policy: GitHubPolicy,
   revision: string,
+  codeFailureIds: readonly number[] = [],
 ): Pick<CI, 'state' | 'details'> {
   const runs = checks.map((c) => checkSchema.parse(c));
   const legacy = statuses.map((s) =>
@@ -67,11 +69,19 @@ export function classifyCI(
       details.push(
         `${required.name}:${run.id}:${run.status}:${run.conclusion}`,
       );
+      if (codeFailureIds.includes(run.id))
+        details.push(
+          `Trusted project step failed after successful setup: ${required.codeStep}`,
+        );
       if (run.status !== 'completed' || run.conclusion === null)
         state = 'pending';
       else if (run.conclusion !== 'success' && state !== 'pending')
         state =
-          run.conclusion === 'failure' ? 'code-failure' : 'infrastructure';
+          run.conclusion === 'failure' &&
+          codeFailureIds.includes(run.id) &&
+          !['infrastructure'].includes(state)
+            ? 'code-failure'
+            : 'infrastructure';
     }
   }
   return { state, details };
@@ -86,6 +96,13 @@ class CachedTransport implements Transport {
     this.taskId = taskId;
   }
   async request(path: string): Promise<Reply> {
+    const delivery = this.store.get(this.taskId);
+    if (
+      !delivery ||
+      delivery.status !== 'watching' ||
+      Date.now() >= delivery.deadlineAt
+    )
+      throw new RelayError('conflict', 'poll stopped or deadline exhausted');
     const sql = this.store.tasks.db.sql;
     const row = sql
       .prepare(
@@ -101,7 +118,7 @@ class CachedTransport implements Transport {
     );
     this.nextAt = Math.max(
       this.nextAt,
-      Date.now() + Number(reply.headers['x-poll-interval'] ?? 0) * 1000,
+      Date.now() + (seconds(reply.headers['x-poll-interval']) ?? 0) * 1000,
     );
     if (reply.status === 304) {
       if (!cached)
@@ -226,7 +243,13 @@ export class Poller {
       );
       const statuses = await api.pages(`/commits/${intent.revision}/statuses`);
       const ci = ciSchema.parse({
-        ...classifyCI(checks, statuses, source.policy, intent.revision),
+        ...classifyCI(
+          checks,
+          statuses,
+          source.policy,
+          intent.revision,
+          await codeFailures(api, checks, intent.revision),
+        ),
         revision: intent.revision,
         requirementVersion: intent.requirementVersion,
         sourceVersion: intent.sourceVersion,
@@ -238,13 +261,11 @@ export class Poller {
         for (const value of comments) {
           const comment = commentSchema.parse(value);
           const key = `${comment.id}:${comment.updated_at}:${createHash('sha256').update(comment.body).digest('hex')}`;
-          const self =
-            comment.body.includes(intent.marker) ||
-            !!sql
-              .prepare(
-                'SELECT 1 FROM github_own_events WHERE task_id=? AND event_id=?',
-              )
-              .get(taskId, comment.id);
+          const self = !!sql
+            .prepare(
+              'SELECT 1 FROM github_own_events WHERE task_id=? AND event_id=?',
+            )
+            .get(taskId, comment.id);
           sql
             .prepare('INSERT OR IGNORE INTO github_inbox VALUES(?,?,?,?)')
             .run(

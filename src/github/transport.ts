@@ -22,18 +22,24 @@ export class GitHubError extends Error {
   constructor(reply: Reply) {
     super(`GitHub HTTP ${reply.status}`);
     this.status = reply.status;
+    const retry = seconds(reply.headers['retry-after']);
+    const reset = seconds(reply.headers['x-ratelimit-reset']);
     this.rateLimited =
       reply.status === 429 ||
-      reply.headers['x-ratelimit-remaining'] === '0' ||
-      !!reply.headers['retry-after'];
+      retry !== null ||
+      (reply.headers['x-ratelimit-remaining'] === '0' && reset !== null);
     this.retryAt = Math.max(
-      Date.now() +
-        Math.max(60000, Number(reply.headers['retry-after'] ?? 0) * 1000),
-      reply.headers['x-ratelimit-remaining'] === '0'
-        ? Number(reply.headers['x-ratelimit-reset'] ?? 0) * 1000
-        : 0,
+      Date.now() + Math.max(60000, (retry ?? 0) * 1000),
+      reply.headers['x-ratelimit-remaining'] === '0' ? (reset ?? 0) * 1000 : 0,
     );
   }
+}
+export function seconds(value: string | undefined): number | null {
+  if (value === undefined || !/^\d+$/.test(value)) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number <= 8640000000000
+    ? number
+    : null;
 }
 export function successful(reply: Reply): unknown {
   if (reply.status < 200 || reply.status >= 300) throw new GitHubError(reply);

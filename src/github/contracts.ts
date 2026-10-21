@@ -30,6 +30,7 @@ export const githubPolicySchema = z
         z.strictObject({
           name: z.string().min(1).max(200),
           appId: z.number().int().positive(),
+          codeStep: z.string().min(1).max(200).optional(),
         }),
       )
       .min(1)

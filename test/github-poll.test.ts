@@ -38,7 +38,7 @@ test('CI requires trusted current SHA and all latest suites; reruns never reuse 
       check,
       { ...check, id: 2, conclusion: 'failure', check_suite: { id: 2 } },
     ]),
-    'code-failure',
+    'infrastructure',
   );
   assert.equal(
     classify([{ ...check, conclusion: 'cancelled' }]),
@@ -83,7 +83,10 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
     pr: 3,
   });
   f.deliveries.save({ ...f.deliveries.get(f.task.id)!, status: 'watching' });
-  let body = 'feedback',
+  f.db.sql
+    .prepare('INSERT INTO github_own_events VALUES(?,?)')
+    .run(f.task.id, 42);
+  let body = `feedback quoting ${intent.marker}`,
     failPage = false;
   const transport: Transport = {
     async request(path) {
