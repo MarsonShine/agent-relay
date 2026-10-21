@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
   "requirementContract": "M3-20261021-v1",
-  "productionRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+  "productionRevision": "035381ba3da813d5644de1eace07d1c042426b19",
   "localGate": {
     "status": "passed",
     "command": "npm run check",
-    "implementationRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+    "implementationRevision": "035381ba3da813d5644de1eace07d1c042426b19",
     "typecheck": "passed",
     "format": "passed",
     "build": "passed",
-    "tests": 149,
-    "passed": 149,
+    "tests": 151,
+    "passed": 151,
     "failed": 0,
     "skipped": 0,
-    "durationMs": 270444.0695
+    "durationMs": 252617.1698
   },
   "realTests": {
     "model": "gpt-6-luna",
@@ -167,6 +167,35 @@
       "passed": 5,
       "failed": 0,
       "skipped": 0
+    },
+    {
+      "status": "passed",
+      "command": "npm run check",
+      "implementationRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+      "typecheck": "passed",
+      "format": "passed",
+      "build": "passed",
+      "tests": 149,
+      "passed": 149,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 270444.0695
+    },
+    {
+      "implementationRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+      "command": "owned process, Codex and workspace focused checks",
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0
     }
-  ]
+  ],
+  "ciRegression": {
+    "firstRevision": "bf665eb8dffea13c6b000c8984aff2b2a0eb0c59",
+    "linuxFailures": 2,
+    "diagnosticRevision": "77bcf8b2155cc062a188e0e8ebd314ef1ca46e7f",
+    "observed": "Git unlock exited 0 and was stopped; empty stdin closure was misclassified as input delivery failure.",
+    "fixRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+    "linuxFixCheck": "success",
+    "linuxJobUrl": "https://github.com/MarsonShine/agent-relay/actions/runs/39537286405/job/119016750659"
+  }
 }
