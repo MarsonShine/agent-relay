@@ -1,3 +1,4 @@
+import { Intents } from './intents.ts';
 import { roleSchema } from '../core/config.ts';
 import type { Profile } from '../core/config.ts';
 import type { Advance } from '../core/handoff.ts';
@@ -91,6 +92,7 @@ export class Runs {
         runsUsed: task.runsUsed + 1,
         diagnostic: null,
       });
+      new Intents(this.tasks).putInside(run, 'launch', 'launch');
       this.tasks.append(
         taskId,
         run.id,
@@ -203,6 +205,7 @@ export class Runs {
         outcome: status,
       });
       if (!task.control) advance?.persist();
+      new Intents(this.tasks).settleInside(current, 'settled');
       this.releaseWorkspace(current);
       const saved = this.tasks.save(task, {
         ...task,
@@ -284,6 +287,7 @@ export class Runs {
             ? 'paused'
             : 'blocked';
       this.update({ ...run, status: 'stopped', outcome: 'reconciled_stop' });
+      new Intents(this.tasks).settleInside(run, 'abandoned');
       this.releaseWorkspace(run);
       const saved = this.tasks.save(task, {
         ...task,

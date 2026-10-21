@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { Intents } from '../storage/intents.ts';
 import {
   agentEventSchema,
   resultSchema,
@@ -222,6 +224,21 @@ export class Controller {
       };
       const [, result] = await Promise.all([consume(), handle.result]);
       const checked = resultSchema.parse(result);
+      if (!detached)
+        new Intents(this.tasks).prepare(
+          run,
+          'result',
+          'result',
+          checked.evidence,
+          JSON.stringify({
+            status: checked.status,
+            stopped: checked.stopped,
+            outputHash:
+              checked.output === null
+                ? null
+                : createHash('sha256').update(checked.output).digest('hex'),
+          }),
+        );
       if (
         !detached &&
         task.kind === 'development' &&

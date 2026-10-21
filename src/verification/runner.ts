@@ -1,3 +1,4 @@
+import { Intents } from '../storage/intents.ts';
 import { createHash } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import { realpath } from 'node:fs/promises';
@@ -133,6 +134,17 @@ export class Verifier {
       if (state.cancelled)
         throw new RelayError('conflict', 'verification cancelled');
       mkdirSync(this.processRoot(), { recursive: true, mode: 0o700 });
+      new Intents(this.workspaces.tasks).prepare(
+        run,
+        'verification',
+        `verification:${index}`,
+        { requirementVersion: task.requirementVersion, codeRevision: revision },
+        JSON.stringify({
+          policyHash: digest(policy),
+          definitionHash: digest(command),
+          id: command.id,
+        }),
+      );
       state.process = new OwnedProcess(
         this.processDirectory(run, index),
         run.owner,
