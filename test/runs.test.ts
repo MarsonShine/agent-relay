@@ -108,3 +108,85 @@ test('run budget cannot reset across a pause or new connection', (t) => {
   assert.equal(runs.claim(task.id, 'fake-v1'), null);
   assert.equal(tasks.get(task.id).status, 'blocked');
 });
+
+test('retry categories, backoff and total deadline survive reopen and requirement replacement', (t) => {
+  const { tasks, path } = fixture(t);
+  const input = request();
+  input.config.budget.maxRuns = 10;
+  input.config.budget.maxInfrastructureRetries = 1;
+  input.config.budget.retryBaseMs = 100;
+  const initial = tasks.create(input, 1000),
+    runs = new Runs(tasks);
+  const first = runs.claim(initial.id, 'fixture', 1001)!;
+  const queued = runs.finish(
+    first,
+    { ...completed, status: 'failed', retry: 'infrastructure' },
+    1002,
+  );
+  assert.equal(queued.infrastructureRetriesUsed, 1);
+  assert.equal(queued.iterationsUsed, 0);
+  assert.equal(queued.retryAt, 1102);
+  assert.equal(runs.claim(initial.id, 'fixture', 1101), null);
+  const other = new Database(path);
+  try {
+    const reopened = new Tasks(other),
+      restarted = new Runs(reopened);
+    assert.equal(reopened.get(initial.id).retryAt, 1102);
+    const revised = reopened.command(initial.id, {
+      action: 'revise',
+      expectedVersion: queued.version,
+      requirementVersion: 1,
+      input: 'New requirement',
+    });
+    assert.equal(revised.infrastructureRetriesUsed, 1);
+    assert.equal(revised.retryAt, 1102);
+    assert.equal(revised.deadlineAt, initial.deadlineAt);
+    const second = restarted.claim(initial.id, 'fixture', 1103)!;
+    const semantic = restarted.finish(
+      second,
+      { ...completed, status: 'blocked', retry: 'semantic' },
+      1104,
+    );
+    assert.equal(semantic.iterationsUsed, 1);
+    assert.equal(semantic.infrastructureRetriesUsed, 1);
+    const third = restarted.claim(initial.id, 'fixture', semantic.retryAt)!;
+    const exhausted = restarted.finish(
+      third,
+      { ...completed, status: 'failed', retry: 'infrastructure' },
+      semantic.retryAt + 1,
+    );
+    assert.equal(exhausted.status, 'blocked');
+    assert.equal(exhausted.infrastructureRetriesUsed, 1);
+    assert.equal(exhausted.runsUsed, 3);
+  } finally {
+    other.close();
+  }
+});
+
+test('cancel overrides retry and exhausted absolute deadline cannot schedule another attempt', (t) => {
+  const { tasks } = fixture(t),
+    runs = new Runs(tasks);
+  const initial = tasks.create(request(), 1000),
+    first = runs.claim(initial.id, 'fixture', 1001)!;
+  const running = tasks.get(initial.id);
+  tasks.command(initial.id, {
+    action: 'cancel',
+    expectedVersion: running.version,
+  });
+  const cancelled = runs.finish(
+    first,
+    { ...completed, status: 'failed', retry: 'infrastructure' },
+    1002,
+  );
+  assert.equal(cancelled.status, 'cancelled');
+  assert.equal(cancelled.infrastructureRetriesUsed, 0);
+  const second = tasks.create(request(), 1000);
+  const run = runs.claim(second.id, 'fixture', second.deadlineAt - 10)!;
+  const result = runs.finish(
+    run,
+    { ...completed, status: 'failed', retry: 'semantic' },
+    second.deadlineAt - 5,
+  );
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.iterationsUsed, 0);
+});

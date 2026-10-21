@@ -87,7 +87,9 @@ export class Controller {
         if (state === 'stopped' && workflowState === 'stopped')
           this.runs.confirmStopped(run.id);
       }
-      const task = this.tasks.list('queued')[0];
+      const task = this.tasks
+        .list('queued')
+        .find((t) => t.retryAt <= Date.now() || t.deadlineAt <= Date.now());
       if (!task) return;
       const role =
         task.kind === 'development' ? this.workflow?.role(task) : 'design';
@@ -266,6 +268,11 @@ export class Controller {
         run,
         {
           ...outcome,
+          ...(winner.failureKind &&
+          run.profile.permission === 'read-only' &&
+          ['failed', 'blocked'].includes(outcome.status)
+            ? { retry: winner.failureKind }
+            : {}),
           ...(advance
             ? { status: advance.status, diagnostic: advance.diagnostic }
             : {}),

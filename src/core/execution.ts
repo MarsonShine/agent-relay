@@ -27,6 +27,7 @@ export const agentEventSchema = z.strictObject({
 });
 export type AgentEvent = z.infer<typeof agentEventSchema>;
 export const resultSchema = z.strictObject({
+  failureKind: z.enum(['infrastructure', 'semantic']).optional(),
   schemaVersion: z.literal(1),
   status: z.enum([
     'completed',

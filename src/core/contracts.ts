@@ -53,6 +53,8 @@ export const taskSchema = z.strictObject({
   config: configSchema,
   runsUsed: z.number().int().nonnegative(),
   iterationsUsed: z.number().int().nonnegative(),
+  infrastructureRetriesUsed: z.number().int().nonnegative().default(0),
+  retryAt: z.number().int().nonnegative().default(0),
   createdAt: z.number().int().nonnegative(),
   deadlineAt: z.number().int().positive(),
   control: z.enum(['pause', 'cancel']).nullable(),
