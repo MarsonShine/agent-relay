@@ -198,3 +198,22 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
     'older successful response cannot overwrite newer failed observation',
   );
 });
+
+test('delivery deadline expires even when rate backoff schedules a later poll', async (t) => {
+  const f = await deliveryFixture(t);
+  f.deliveries.prepare(f.task, 'a'.repeat(40));
+  f.deliveries.save({
+    ...f.deliveries.get(f.task.id)!,
+    status: 'watching',
+    nextPollAt: Date.now() + 60000,
+    deadlineAt: Date.now() - 1,
+  });
+  let requests = 0;
+  f.transport.request = async () => {
+    requests++;
+    throw Error('expired poll must not request');
+  };
+  await new Poller(f.deliveries).tick();
+  assert.equal(f.deliveries.get(f.task.id)?.status, 'blocked');
+  assert.equal(requests, 0);
+});

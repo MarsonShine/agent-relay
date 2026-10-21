@@ -184,7 +184,11 @@ export class Poller {
     try {
       for (const d of this.store
         .list()
-        .filter((d) => d.status === 'watching' && d.nextPollAt <= Date.now()))
+        .filter(
+          (d) =>
+            d.status === 'watching' &&
+            (d.nextPollAt <= Date.now() || d.deadlineAt <= Date.now()),
+        ))
         await this.poll(d.taskId);
     } finally {
       this.busy = false;
@@ -194,7 +198,11 @@ export class Poller {
     const delivery = this.store.tasks.db.transaction(() => {
       const d = this.store.get(taskId)!,
         policy = this.store.sources.get(taskId)!.policy;
-      if (d.status !== 'watching' || d.nextPollAt > Date.now()) return null;
+      if (
+        d.status !== 'watching' ||
+        (d.nextPollAt > Date.now() && d.deadlineAt > Date.now())
+      )
+        return null;
       if (d.polls >= policy.maxPolls || Date.now() >= d.deadlineAt) {
         this.store.save({
           ...d,
