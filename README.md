@@ -65,7 +65,7 @@ node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config
 
 开发状态包含阶段交接、每轮验证和工作树信息。实现结果需要干净的新提交；审查绑定候选 SHA 和需求版本，旧检查不能覆盖新代码。检查失败或审查反馈在同一迭代预算内修复；缺少证据、停止未知或预算耗尽会阻塞。用户答复升级需求版本并重新 triage，已用次数和截止时间不重置。
 
-真实调用会产生模型使用量；调用次数与时间有上限，金额未知。原始运行记录仅保留在私有目录。当前 deliver 是本地验收阶段，GitHub 交付属于 M4；不会自动推送目标项目或合并。
+真实调用会产生模型使用量；调用次数与时间有上限，金额未知。原始运行记录仅保留在私有目录。本地 accepted 表示当前候选验收通过。M4 提供独立的 GitHub 交付状态：可信配置导入 issue，显式 publish 后有界轮询并处理授权反馈，complete-delivery 关闭反馈窗口；不自动合并。详见 [M4 契约](docs/m4.md)。
 
 ## 本机数据与恢复边界
 
@@ -79,6 +79,7 @@ node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config
 
 | 文档 | 用途 |
 | --- | --- |
+| [M4 GitHub 交付](docs/m4.md) | 来源、发布意图、反馈、CI 与终态边界 |
 | [M3 持续协作与恢复](docs/m3.md) | 需求历史、进程所有权、预算、意图和验证限制 |
 | [M2 当前进度与契约](docs/m2.md) | Codex 适配器、生命周期与后续闭环边界 |
 | [M1 控制内核契约与验收](docs/m1.md) | 已实现边界、运行协议和版本化验收证据 |
