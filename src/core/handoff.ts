@@ -68,7 +68,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
     summary: text,
     baseRevision: sha,
     resultRevision: sha,
-    changedFiles: z.array(relativeFile).min(1).max(100),
+    changedFiles: z.array(relativeFile).max(100),
     unresolved: z.array(text).max(30),
   }),
   z.strictObject({

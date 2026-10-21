@@ -10,8 +10,15 @@ import { LocalWorkflow } from '../src/workflow/local.ts';
 import { WorkspaceAccess } from '../src/workspace/access.ts';
 import { workspaceFixture, git } from './workspace-helpers.ts';
 
-for (const reviseRequirement of [false, true])
-  test(`code tree repetition is ${reviseRequirement ? 'allowed for an explicit new requirement' : 'blocked within the same requirement'}`, async (t) => {
+for (const mode of [
+  'unchanged-without-finding',
+  'cycle',
+  'new-requirement',
+  'dispute-approve',
+  'dispute-repeat',
+])
+  test(`progress and independent evidence: ${mode}`, async (t) => {
+    const reviseRequirement = mode === 'new-requirement';
     const f = workspaceFixture(t),
       original = f.tasks.get(f.task.id);
     f.db.transaction(() =>
@@ -131,7 +138,91 @@ for (const reviseRequirement of [false, true])
         };
       };
     await settle(triage);
+    if (mode === 'unchanged-without-finding') {
+      await assert.rejects(
+        settle(async (task, run) => {
+          await new WorkspaceAccess(f.manager).acquire(run, 'implementation');
+          return {
+            stage: 'implement',
+            baseRevision: task.codeRevision!,
+            resultRevision: task.codeRevision!,
+            changedFiles: [],
+            summary: 'no change',
+            unresolved: [],
+            responses: [],
+          };
+        }),
+        /new clean committed result/,
+      );
+      return;
+    }
     await settle(implement('changed\n'));
+    if (mode.startsWith('dispute')) {
+      const review =
+        (approve: boolean) =>
+        (task: Task): Handoff => ({
+          stage: 'code_review',
+          subjectRunId: workflow
+            .history(task)
+            .findLast((h) => h.result.stage === 'implement')!.runId,
+          verdict: approve ? 'approve' : 'revise',
+          coverage: [{ criterionId: 'A1', proof: 'verified fixture bytes' }],
+          resolutions: approve
+            ? [
+                {
+                  findingId: 'F1',
+                  verification:
+                    'independent byte check confirms finding was false',
+                },
+              ]
+            : [],
+          findings: approve
+            ? []
+            : [
+                {
+                  id: 'F1',
+                  severity: 'blocking',
+                  origin: 'implementation',
+                  location: 'value.txt',
+                  trigger: 'fixture claim',
+                  proof: 'synthetic review finding',
+                  impact: 'fixture gate',
+                },
+              ],
+        });
+      await settle(review(false));
+      const revision = f.tasks.get(f.task.id).codeRevision;
+      const dispute = async (task: Task, run: Run): Promise<Handoff> => {
+        await new WorkspaceAccess(f.manager).acquire(run, 'implementation');
+        return {
+          stage: 'implement',
+          baseRevision: task.codeRevision!,
+          resultRevision: task.codeRevision!,
+          changedFiles: [],
+          summary: 'No code change; dispute finding',
+          unresolved: [],
+          responses: [
+            {
+              findingId: 'F1',
+              disposition: 'disputed',
+              proof: 'actual byte check contradicts the finding',
+            },
+          ],
+        };
+      };
+      const candidate = await settle(dispute);
+      assert.equal(candidate.stage, 'code_review');
+      assert.equal(candidate.codeRevision, revision);
+      assert.equal(workflow.verifier.reports(candidate).length, 2);
+      if (mode === 'dispute-approve') {
+        assert.equal((await settle(review(true))).status, 'succeeded');
+      } else {
+        await settle(review(false));
+        await assert.rejects(settle(dispute), /new clean committed result/);
+        assert.equal(f.tasks.get(f.task.id).status, 'blocked');
+      }
+      return;
+    }
     if (reviseRequirement) {
       const task = f.tasks.get(f.task.id);
       f.tasks.command(task.id, {

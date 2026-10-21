@@ -199,6 +199,7 @@ export class LocalWorkflow {
     const unresolved = new Map(
       this.pending(task, history, run.id).map((f) => [f.id, f.origin]),
     );
+    let newDispute = false;
     if (result.stage === 'implement' || result.stage === 'design') {
       const relevant = [...unresolved]
         .filter(
@@ -212,7 +213,28 @@ export class LocalWorkflow {
           'conflict',
           'repair must address or dispute every outstanding finding with evidence',
         );
+      const previous = latest(result.stage)?.result;
+      const previousResponses =
+        previous &&
+        (previous.stage === 'implement' || previous.stage === 'design')
+          ? previous.responses
+          : [];
+      newDispute =
+        relevant.length > 0 &&
+        result.responses.length === relevant.length &&
+        relevant.every((id) =>
+          result.responses.some(
+            (r) => r.findingId === id && r.disposition === 'disputed',
+          ),
+        ) &&
+        relevant.some(
+          (id) =>
+            !previousResponses.some(
+              (r) => r.findingId === id && r.disposition === 'disputed',
+            ),
+        );
       if (
+        !newDispute &&
         result.stage === 'design' &&
         history.some(
           (h) =>
@@ -270,17 +292,23 @@ export class LocalWorkflow {
       const workspace = this.workspaces
         .list(task.id)
         .find((w) => w.kind === 'implementation');
+      const previousImplementation = latest('implement')?.result;
+      const unchangedCandidate =
+        result.resultRevision === this.implementationBase(task);
       if (
         !workspace ||
         result.baseRevision !== this.implementationBase(task) ||
         result.unresolved.length ||
         (await this.workspaces.git.verify(workspace, true)) !==
           result.resultRevision ||
-        result.resultRevision === this.implementationBase(task)
+        (unchangedCandidate &&
+          (!newDispute ||
+            previousImplementation?.stage !== 'implement' ||
+            previousImplementation.resultRevision !== result.resultRevision))
       )
         throw new RelayError(
           'conflict',
-          'implementation requires a new clean committed result with no unresolved work',
+          'implementation requires a new clean committed result or a new evidence-backed dispute of the current candidate',
         );
       const files = (
         await this.workspaces.git.command(workspace.path, [
@@ -322,7 +350,9 @@ export class LocalWorkflow {
             : [],
         ),
       ];
-      for (const revision of new Set(priorRevisions)) {
+      for (const revision of unchangedCandidate && newDispute
+        ? []
+        : new Set(priorRevisions)) {
         if (candidateTree === (await tree(revision)))
           throw new RelayError(
             'conflict',
