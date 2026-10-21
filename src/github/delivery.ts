@@ -10,12 +10,12 @@ import type { Push } from './push.ts';
 export class Publisher {
   readonly store: Deliveries;
   readonly push: Push;
-  readonly candidate: (task: Task) => Promise<string>;
+  readonly candidate: (task: Task, baseRevision?: string) => Promise<string>;
   private busy = false;
   constructor(
     store: Deliveries,
     push: Push,
-    candidate: (task: Task) => Promise<string>,
+    candidate: (task: Task, baseRevision?: string) => Promise<string>,
   ) {
     this.store = store;
     this.push = push;
@@ -31,6 +31,7 @@ export class Publisher {
     const base = await api.ref(source.policy.base);
     if (!base)
       throw new RelayError('conflict', 'trusted base branch is missing');
+    await this.candidate(task, base);
     return this.store.prepare(task, base);
   }
   async tick(): Promise<void> {
@@ -67,10 +68,25 @@ export class Publisher {
     const task = this.store.current(intent),
       source = this.store.sources.get(task.id)!;
     const api = new GitHubApi(this.store.sources.transport, source.policy);
-    const workspace = await this.candidate(task);
+    const workspace = await this.candidate(task, intent.baseRevision);
     await repository(api.transport, source.policy);
     if ((await api.ref(source.policy.base)) !== intent.baseRevision)
       throw new RelayError('conflict', 'trusted base changed during delivery');
+    if (
+      intent.push === 'dispatched' &&
+      (await this.push.stop(intent)) !== 'stopped'
+    )
+      throw new RelayError('conflict', 'push owner is still unknown');
+    let remote = await api.ref(intent.branch);
+    if (
+      intent.push === 'dispatched' &&
+      remote !== intent.revision &&
+      remote !== intent.expectedRemote
+    )
+      throw new RelayError(
+        'conflict',
+        'remote head was changed by another actor',
+      );
     const pulls = await api.pulls(intent.branch);
     if (pulls.length > 1)
       throw new RelayError('conflict', 'multiple PRs use the delivery branch');
@@ -79,19 +95,15 @@ export class Publisher {
         pulls[0],
         intent.branch,
         intent.marker,
-        intent.push === 'settled'
+        intent.push === 'dispatched' && remote === intent.revision
           ? intent.revision
-          : (intent.expectedRemote ?? intent.revision),
+          : intent.push === 'settled'
+            ? intent.revision
+            : (intent.expectedRemote ?? intent.revision),
         intent.baseRevision,
       );
     if (intent.pr && pulls[0]?.number !== intent.pr)
       throw new RelayError('conflict', 'recorded PR is missing or replaced');
-    if (
-      intent.push === 'dispatched' &&
-      (await this.push.stop(intent)) !== 'stopped'
-    )
-      throw new RelayError('conflict', 'push owner is still unknown');
-    let remote = await api.ref(intent.branch);
     if (intent.push === 'prepared') {
       if (remote !== intent.expectedRemote || (!intent.pr && pulls.length))
         throw new RelayError(
@@ -171,8 +183,17 @@ export class Publisher {
       const d = this.store.get(task.id)!;
       // Receipts remain visible even if cancellation won the race.
       if (d.current === key && d.status === 'pending') {
-        this.store.current(intent);
-        this.store.save({ ...d, status: 'watching', diagnostic: null });
+        try {
+          this.store.current(intent);
+          this.store.save({ ...d, status: 'watching', diagnostic: null });
+        } catch {
+          this.store.save({
+            ...d,
+            status: 'blocked',
+            diagnostic:
+              'publication receipt retained but local evidence was superseded',
+          });
+        }
       }
     });
   }

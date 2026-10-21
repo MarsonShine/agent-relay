@@ -88,6 +88,8 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
     .run(f.task.id, 42);
   let body = `feedback quoting ${intent.marker}`,
     failPage = false;
+  let holdStatus: (() => Promise<void>) | null = null;
+  let failedCheck = false;
   const transport: Transport = {
     async request(path) {
       let value: unknown;
@@ -135,9 +137,18 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
           },
         ];
       } else if (path.includes('/check-runs?'))
-        value = { total_count: 1, check_runs: [check] };
-      else if (path.includes('/statuses?')) value = [];
-      else value = { id: 10, full_name: 'owner/project', archived: false };
+        value = {
+          total_count: 1,
+          check_runs: [
+            { ...check, conclusion: failedCheck ? 'failure' : 'success' },
+          ],
+        };
+      else if (path.includes('/statuses?')) {
+        const hold = holdStatus;
+        holdStatus = null;
+        await hold?.();
+        value = [];
+      } else value = { id: 10, full_name: 'owner/project', archived: false };
       return { status: 200, headers: { etag: 'fixture' }, body: value };
     },
   };
@@ -153,6 +164,7 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
   store.save({ ...store.get(f.task.id)!, nextPollAt: 0 });
   await new Poller(store).poll(f.task.id);
   assert.equal(poll.inbox(f.task.id).length, 3);
+  assert.equal(poll.inbox(f.task.id)[0]?.disposition, 'superseded');
   assert.equal(store.get(f.task.id)?.polls, 2);
   failPage = true;
   store.save({ ...store.get(f.task.id)!, nextPollAt: 0 });
@@ -160,4 +172,29 @@ test('poll persists cursor/dedup edits, allows same actor, suppresses owned even
   assert.equal(store.get(f.task.id)?.status, 'blocked');
   assert.equal(store.get(f.task.id)?.polls, 3);
   assert.equal(poll.inbox(f.task.id).length, 3);
+  failPage = false;
+  store.save({ ...store.get(f.task.id)!, status: 'watching', nextPollAt: 0 });
+  let release!: () => void, arrived!: () => void;
+  const waiting = new Promise<void>((r) => {
+    arrived = r;
+  });
+  holdStatus = async () => {
+    arrived();
+    await new Promise<void>((r) => {
+      release = r;
+    });
+  };
+  const older = new Poller(store).poll(f.task.id);
+  await waiting;
+  failedCheck = true;
+  store.save({ ...store.get(f.task.id)!, nextPollAt: 0 });
+  await new Poller(store).poll(f.task.id);
+  assert.equal(poll.ci(f.task.id)?.state, 'infrastructure');
+  release();
+  await older;
+  assert.equal(
+    poll.ci(f.task.id)?.state,
+    'infrastructure',
+    'older successful response cannot overwrite newer failed observation',
+  );
 });

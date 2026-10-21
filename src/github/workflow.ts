@@ -24,11 +24,13 @@ export class GitHubWorkflow {
   constructor(store: Deliveries, push: Push, local: LocalWorkflow) {
     this.store = store;
     this.local = local;
-    this.publisher = new Publisher(store, push, (task) => this.candidate(task));
+    this.publisher = new Publisher(store, push, (task, base) =>
+      this.candidate(task, base),
+    );
     this.poller = new Poller(store);
     this.feedback = new Feedback(store);
   }
-  async candidate(task: Task): Promise<string> {
+  async candidate(task: Task, baseRevision?: string): Promise<string> {
     const issues = await this.local.acceptance(task);
     if (issues.length) throw new RelayError('conflict', issues.join('; '));
     if (this.store.tasks.get(task.id).version !== task.version)
@@ -36,9 +38,15 @@ export class GitHubWorkflow {
         'conflict',
         'candidate changed during acceptance check',
       );
-    return this.local.workspaces
+    const workspace = this.local.workspaces
       .list(task.id)
-      .find((w) => w.kind === 'implementation')!.path;
+      .find((w) => w.kind === 'implementation')!;
+    if (baseRevision && workspace.baselineRevision !== baseRevision)
+      throw new RelayError(
+        'conflict',
+        'publication base must match the accepted workspace baseline',
+      );
+    return workspace.path;
   }
   async command(taskId: string, value: unknown): Promise<void> {
     const command = deliveryCommandSchema.parse(value),
@@ -77,14 +85,29 @@ export class GitHubWorkflow {
         'reconciliation cannot reset terminal state or budgets',
       );
     await this.candidate(task);
-    const intent = this.store.intent(d.current);
-    this.store.save({
-      ...d,
-      status:
-        intent.push === 'settled' && intent.pull === 'settled'
-          ? 'watching'
-          : 'pending',
-      diagnostic: null,
+    this.store.tasks.db.transaction(() => {
+      const current = this.store.get(taskId);
+      if (
+        !current ||
+        current.status !== 'blocked' ||
+        current.current !== d.current ||
+        this.store.tasks.get(taskId).version !== task.version ||
+        Date.now() >= current.deadlineAt ||
+        current.polls >= this.store.sources.get(taskId)!.policy.maxPolls
+      )
+        throw new RelayError(
+          'conflict',
+          'delivery changed during reconciliation',
+        );
+      const intent = this.store.intent(current.current);
+      this.store.save({
+        ...current,
+        status:
+          intent.push === 'settled' && intent.pull === 'settled'
+            ? 'watching'
+            : 'pending',
+        diagnostic: null,
+      });
     });
   }
   tick(): Promise<void> {
@@ -102,12 +125,17 @@ export class GitHubWorkflow {
         try {
           await this.publisher.prepare(task);
         } catch {
-          this.store.save({
-            ...this.store.get(d.taskId)!,
-            status: 'blocked',
-            diagnostic:
-              'updated local candidate could not be prepared for delivery',
-          });
+          const current = this.store.get(d.taskId)!;
+          if (
+            current.status === 'waiting_local' &&
+            current.current === d.current
+          )
+            this.store.save({
+              ...current,
+              status: 'blocked',
+              diagnostic:
+                'updated local candidate could not be prepared for delivery',
+            });
         }
       } else if (
         ['blocked', 'failed', 'cancelled'].includes(task.status) ||

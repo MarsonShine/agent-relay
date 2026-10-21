@@ -31,9 +31,18 @@ export class Feedback {
       )
         return;
       const sql = this.store.tasks.db.sql;
-      for (const event of this.poller
-        .inbox(taskId)
-        .filter((e) => e.disposition === 'pending')) {
+      const inbox = this.poller.inbox(taskId);
+      const latest = new Map<number, string>();
+      for (const e of inbox) latest.set(e.comment.id, e.key);
+      for (const event of inbox.filter((e) => e.disposition === 'pending')) {
+        if (latest.get(event.comment.id) !== event.key) {
+          sql
+            .prepare(
+              "UPDATE github_inbox SET disposition='superseded' WHERE task_id=? AND event_key=?",
+            )
+            .run(taskId, event.key);
+          continue;
+        }
         let disposition = 'invalid';
         const actor = source.policy.feedback.find(
           (a) =>

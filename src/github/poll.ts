@@ -166,6 +166,7 @@ export class Poller {
       t = this.store.tasks.get(delivery.taskId);
     if (
       d?.current !== delivery.current ||
+      d.polls !== delivery.polls ||
       d.status !== 'watching' ||
       t.status !== 'succeeded' ||
       t.requirementVersion !== intent.requirementVersion ||
@@ -267,6 +268,11 @@ export class Poller {
             )
             .get(taskId, comment.id);
           sql
+            .prepare(
+              "UPDATE github_inbox SET disposition='superseded' WHERE task_id=? AND json_extract(document,'$.id')=? AND event_key!=? AND disposition='pending'",
+            )
+            .run(taskId, comment.id, key);
+          sql
             .prepare('INSERT OR IGNORE INTO github_inbox VALUES(?,?,?,?)')
             .run(
               taskId,
@@ -288,7 +294,12 @@ export class Poller {
       });
     } catch (error) {
       const d = this.store.get(taskId)!;
-      if (d.current !== delivery.current || d.status !== 'watching') return;
+      if (
+        d.current !== delivery.current ||
+        d.polls !== delivery.polls ||
+        d.status !== 'watching'
+      )
+        return;
       const retry =
         error instanceof GitHubError &&
         ([429, 502, 503, 504].includes(error.status) || error.rateLimited);
