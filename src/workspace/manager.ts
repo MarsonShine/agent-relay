@@ -1,0 +1,372 @@
+import { contentDigest } from './digest.ts';
+import { randomUUID } from 'node:crypto';
+import { mkdir, realpath, lstat } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
+import type { Tasks } from '../storage/tasks.ts';
+import { RelayError } from '../core/errors.ts';
+import { terminal } from '../core/state.ts';
+import { workspaceSchema } from './contracts.ts';
+import type { Workspace, WorkspaceMode } from './contracts.ts';
+import { GitWorktrees, inside, pathKey, exists, destination } from './git.ts';
+
+export class Workspaces {
+  readonly tasks: Tasks;
+  readonly root: string;
+  readonly git: GitWorktrees;
+  constructor(tasks: Tasks, root: string, git = new GitWorktrees()) {
+    if (!isAbsolute(root))
+      throw new RelayError(
+        'invalid',
+        'workspace storage root must be absolute',
+      );
+    this.tasks = tasks;
+    this.root = root;
+    this.git = git;
+  }
+  get(id: string): Workspace {
+    const row = this.tasks.db.sql
+      .prepare('SELECT document FROM workspaces WHERE id=?')
+      .get(id);
+    if (!row) throw new RelayError('not_found', 'workspace does not exist');
+    return workspaceSchema.parse(JSON.parse(String(row.document)));
+  }
+  list(taskId: string): Workspace[] {
+    return this.tasks.db.sql
+      .prepare('SELECT document FROM workspaces WHERE task_id=? ORDER BY rowid')
+      .all(taskId)
+      .map((row) => workspaceSchema.parse(JSON.parse(String(row.document))));
+  }
+  private save(workspace: Workspace): Workspace {
+    const value = workspaceSchema.parse(workspace);
+    this.tasks.db.sql
+      .prepare('UPDATE workspaces SET document=? WHERE id=?')
+      .run(JSON.stringify(value), value.id);
+    return value;
+  }
+  async prepare(taskId: string, kind: WorkspaceMode): Promise<Workspace> {
+    const task = this.tasks.get(taskId);
+    if (!task.codeRevision)
+      throw new RelayError(
+        'invalid',
+        'workspace requires a recorded baseline commit',
+      );
+    const existing = this.list(taskId).find(
+      (w) =>
+        w.kind === kind &&
+        (kind === 'implementation' ||
+          (w.revision === task.codeRevision &&
+            w.requirementVersion === task.requirementVersion)),
+    );
+    if (existing) {
+      if (existing.state !== 'ready')
+        throw new RelayError(
+          'conflict',
+          'workspace intent requires reconciliation; it will not be replayed',
+        );
+      if (pathKey(await destination(this.root)) !== pathKey(existing.root))
+        throw new RelayError(
+          'conflict',
+          'configured workspace root differs from registration',
+        );
+      const identity = await this.git.identity(task.repo);
+      if (
+        pathKey(identity.repo) !== pathKey(existing.repo) ||
+        pathKey(identity.commonDir) !== pathKey(existing.commonDir)
+      )
+        throw new RelayError(
+          'conflict',
+          'task repository differs from registration',
+        );
+      await this.git.verify(existing, kind !== 'implementation');
+      return existing;
+    }
+    const identity = await this.git.identity(task.repo);
+    await this.git.preflight(
+      identity.repo,
+      task.codeRevision,
+      task.config.allowedFiles,
+    );
+    const targetRoot = await destination(this.root);
+    if (
+      inside(identity.repo, targetRoot) ||
+      inside(targetRoot, identity.repo) ||
+      inside(identity.commonDir, targetRoot)
+    )
+      throw new RelayError(
+        'invalid',
+        'workspace root must be separate from the source checkout',
+      );
+    await mkdir(this.root, { recursive: true, mode: 0o700 });
+    if ((await lstat(this.root)).isSymbolicLink())
+      throw new RelayError('invalid', 'workspace root must not be a symlink');
+    const root = await realpath(this.root);
+    if (
+      inside(identity.repo, root) ||
+      inside(root, identity.repo) ||
+      inside(identity.commonDir, root)
+    )
+      throw new RelayError(
+        'invalid',
+        'workspace root must be separate from the source checkout',
+      );
+    const implementation = this.list(taskId).find(
+      (w) => w.kind === 'implementation',
+    );
+    if (kind === 'review' && implementation) {
+      if (
+        implementation.state !== 'ready' ||
+        (await this.git.verify(implementation, true)) !== task.codeRevision
+      )
+        throw new RelayError(
+          'conflict',
+          'implementation must match the committed review revision',
+        );
+    }
+    if (
+      kind === 'repository' &&
+      ((await this.git.head(identity.repo)) !== task.codeRevision ||
+        (await this.git.status(identity.repo)))
+    )
+      throw new RelayError(
+        'conflict',
+        'repository inspection requires a clean recorded revision',
+      );
+    const id = randomUUID();
+    const workspace = workspaceSchema.parse({
+      schemaVersion: 1,
+      id,
+      taskId,
+      kind,
+      state: kind === 'repository' ? 'ready' : 'creating',
+      ...identity,
+      root,
+      path: kind === 'repository' ? identity.repo : join(root, id),
+      contentHash: null,
+      branch: kind === 'implementation' ? `codex/task-${taskId}/work` : null,
+      baselineRevision: implementation?.baselineRevision ?? task.codeRevision,
+      revision: task.codeRevision,
+      requirementVersion: task.requirementVersion,
+    });
+    if (kind !== 'repository' && (await exists(workspace.path)))
+      throw new RelayError('conflict', 'workspace destination already exists');
+    this.tasks.db.transaction(() => {
+      const current = this.tasks.get(taskId);
+      if (current.version !== task.version)
+        throw new RelayError(
+          'conflict',
+          'task changed during workspace preparation',
+        );
+      if (
+        this.tasks.db.sql
+          .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+          .get(taskId)
+      )
+        throw new RelayError('conflict', 'task workspace is already occupied');
+      this.tasks.db.sql
+        .prepare(
+          'INSERT INTO workspaces(id,task_id,operation_key,document) VALUES(?,?,?,?)',
+        )
+        .run(
+          id,
+          taskId,
+          kind === 'implementation'
+            ? kind
+            : `${kind}:${task.requirementVersion}:${task.codeRevision}`,
+          JSON.stringify(workspace),
+        );
+      this.tasks.append(
+        taskId,
+        null,
+        `workspace:${id}`,
+        'workspace.prepared',
+        `${kind}:${task.codeRevision}`,
+      );
+    });
+    if (kind === 'repository') return workspace;
+    await this.git.create(workspace);
+    await this.git.verify(workspace, true);
+    const contentHash =
+      kind === 'review' ? await contentDigest(workspace.path) : null;
+    return this.tasks.db.transaction(() =>
+      this.save({ ...workspace, state: 'ready', contentHash }),
+    );
+  }
+  /** Explicit acknowledgement of a completed creation; never replays Git or accepts dirty state. */
+  async confirmCreated(id: string): Promise<Workspace> {
+    const workspace = this.get(id),
+      task = this.tasks.get(workspace.taskId);
+    const unoccupied = () =>
+      !this.tasks.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(task.id) &&
+      !this.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id);
+    if (
+      workspace.state !== 'creating' ||
+      !unoccupied() ||
+      task.codeRevision !== workspace.revision ||
+      task.requirementVersion !== workspace.requirementVersion
+    )
+      throw new RelayError(
+        'conflict',
+        'creation cannot be confirmed while execution or evidence is uncertain',
+      );
+    if (
+      pathKey(await destination(this.root)) !== pathKey(workspace.root) ||
+      (await this.git.verify(workspace, true)) !== workspace.revision
+    )
+      throw new RelayError(
+        'conflict',
+        'creation does not match its recorded baseline',
+      );
+    const contentHash =
+      workspace.kind === 'review' ? await contentDigest(workspace.path) : null;
+    return this.tasks.db.transaction(() => {
+      if (
+        this.get(id).state !== 'creating' ||
+        this.tasks.get(task.id).version !== task.version ||
+        !unoccupied()
+      )
+        throw new RelayError(
+          'conflict',
+          'creation changed during confirmation',
+        );
+      this.tasks.append(
+        task.id,
+        null,
+        `workspace-confirm:${id}`,
+        'workspace.confirmed',
+        workspace.revision,
+      );
+      return this.save({ ...workspace, state: 'ready', contentHash });
+    });
+  }
+  /** Operator acknowledgement only: no scheduling, lease release, budget reset, or acceptance. */
+  async confirmCandidate(
+    taskId: string,
+    expectedVersion: number,
+    revision: string,
+  ) {
+    const task = this.tasks.get(taskId),
+      workspace = this.list(taskId).find((w) => w.kind === 'implementation');
+    const free = () =>
+      !this.tasks.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(taskId) &&
+      !this.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(taskId);
+    if (
+      !workspace ||
+      workspace.state !== 'ready' ||
+      !['blocked', 'paused'].includes(task.status) ||
+      task.version !== expectedVersion ||
+      !task.codeRevision ||
+      revision === task.codeRevision ||
+      !free()
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate confirmation requires a stopped blocked task and a new revision',
+      );
+    if (
+      (await this.git.verify(workspace, true)) !== revision ||
+      (
+        await this.git.command(workspace.path, [
+          'merge-base',
+          task.codeRevision,
+          revision,
+        ])
+      ).trim() !== task.codeRevision
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate does not extend the recorded revision',
+      );
+    const files = (
+      await this.git.command(workspace.path, [
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--name-only',
+        '-z',
+        task.codeRevision,
+        revision,
+      ])
+    )
+      .split('\0')
+      .filter(Boolean);
+    if (
+      !files.length ||
+      !task.config.allowedFiles ||
+      files.some((p) => !task.config.allowedFiles!.includes(p))
+    )
+      throw new RelayError(
+        'conflict',
+        'candidate exceeds trusted change scope',
+      );
+    return this.tasks.db.transaction(() => {
+      if (this.tasks.get(taskId).version !== task.version || !free())
+        throw new RelayError('conflict', 'candidate ownership changed');
+      this.save({
+        ...workspace,
+        confirmedCandidate: { fromRevision: task.codeRevision!, revision },
+      });
+      const updated = this.tasks.save(task, {
+        ...task,
+        codeRevision: revision,
+      });
+      this.tasks.append(
+        taskId,
+        null,
+        `candidate-confirm:${updated.version}`,
+        'candidate.confirmed',
+        revision,
+      );
+      return updated;
+    });
+  }
+  async inspect(
+    id: string,
+  ): Promise<{ workspace: Workspace; consistent: boolean }> {
+    const workspace = this.get(id);
+    try {
+      await this.git.verify(workspace, workspace.kind !== 'implementation');
+      return { workspace, consistent: true };
+    } catch {
+      return { workspace, consistent: false };
+    }
+  }
+  async remove(id: string): Promise<Workspace> {
+    const workspace = this.get(id);
+    if (pathKey(await destination(this.root)) !== pathKey(workspace.root))
+      throw new RelayError(
+        'conflict',
+        'configured workspace root differs from registration',
+      );
+    if (!terminal.has(this.tasks.get(workspace.taskId).status))
+      throw new RelayError(
+        'conflict',
+        'only terminal task workspaces can be removed',
+      );
+    if (workspace.state === 'removed') return workspace;
+    if (workspace.state !== 'ready' || workspace.kind === 'repository')
+      throw new RelayError('conflict', 'workspace is not eligible for removal');
+    await this.git.assertRemovable(workspace);
+    this.tasks.db.transaction(() => {
+      if (
+        this.get(id).state !== 'ready' ||
+        this.tasks.db.sql
+          .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+          .get(workspace.taskId)
+      )
+        throw new RelayError('conflict', 'workspace is occupied or changed');
+      this.save({ ...workspace, state: 'removing' });
+    });
+    await this.git.remove(workspace);
+    return this.tasks.db.transaction(() =>
+      this.save({ ...workspace, state: 'removed' }),
+    );
+  }
+}

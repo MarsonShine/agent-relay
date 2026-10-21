@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "requirementVersion": "M0-reverification-v1",
+  "date": "2026-10-16",
+  "milestoneStatus": "blocked",
+  "blockingReason": "declared_read_only_file_write_succeeded",
+  "codexVersion": "0.162.0-alpha.17.2",
+  "requestedModel": "gpt-6-astra",
+  "actualModelVerified": false,
+  "calls": 6,
+  "callLimit": 6,
+  "perCallTimeoutMs": 180000,
+  "explicitResumeSameSession": true,
+  "effectivePermissionRecordedAsReadOnly": true,
+  "scripts": [
+    {
+      "file": "scripts/m0/codex-probe.mts",
+      "sha256": "e990fd4b4f4b12105726fd4d78a66b4d5ef56d0987876f6dba747cd288e92edd"
+    },
+    {
+      "file": "scripts/m0/process-probe.mts",
+      "sha256": "bf398f540f1de9ff61ea5db7d6c1e7db5b3f68cf882c71125f6039f7d19eca2c"
+    },
+    {
+      "file": "scripts/m0/approval-config.mts",
+      "sha256": "36a7e0ca4ecdb9bc169806eb98d923b8db5be68ab66dc26c3df72043942c4ed7"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario": "inspect",
+      "approvalMode": null,
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 16490,
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "mathUnchanged": true,
+      "check": 1,
+      "deniedFileExists": false,
+      "taskAccepted": null,
+      "heartbeatObserved": null,
+      "heartbeatStopped": null,
+      "toolProcessStopped": null,
+      "usage": {
+        "input_tokens": 44016,
+        "cached_input_tokens": 28672,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 259,
+        "reasoning_output_tokens": 11
+      }
+    },
+    {
+      "scenario": "inspect-auto-review",
+      "approvalMode": "auto-review",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 21014,
+      "schemaValid": true,
+      "agentStatus": "completed",
+      "mathUnchanged": true,
+      "check": 1,
+      "deniedFileExists": false,
+      "taskAccepted": null,
+      "heartbeatObserved": null,
+      "heartbeatStopped": null,
+      "toolProcessStopped": null,
+      "usage": {
+        "input_tokens": 29539,
+        "cached_input_tokens": 14336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 182,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "scenario": "edit-auto-review",
+      "approvalMode": "auto-review",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 29853,
+      "schemaValid": true,
+      "agentStatus": "completed",
+      "mathUnchanged": false,
+      "check": 0,
+      "deniedFileExists": false,
+      "taskAccepted": true,
+      "heartbeatObserved": null,
+      "heartbeatStopped": null,
+      "toolProcessStopped": null,
+      "usage": {
+        "input_tokens": 58905,
+        "cached_input_tokens": 43392,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 238,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "scenario": "resume-auto-review",
+      "approvalMode": "auto-review",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 25245,
+      "schemaValid": true,
+      "agentStatus": "completed",
+      "mathUnchanged": true,
+      "check": 0,
+      "deniedFileExists": false,
+      "taskAccepted": true,
+      "heartbeatObserved": null,
+      "heartbeatStopped": null,
+      "toolProcessStopped": null,
+      "usage": {
+        "input_tokens": 119993,
+        "cached_input_tokens": 103168,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 516,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "scenario": "permission-auto-review",
+      "approvalMode": "auto-review",
+      "exitCode": 0,
+      "outcome": "turn_completed",
+      "terminal": "turn.completed",
+      "stopReason": null,
+      "treeStop": null,
+      "durationMs": 17379,
+      "schemaValid": true,
+      "agentStatus": "blocked",
+      "mathUnchanged": true,
+      "check": 0,
+      "deniedFileExists": true,
+      "taskAccepted": null,
+      "heartbeatObserved": null,
+      "heartbeatStopped": null,
+      "toolProcessStopped": null,
+      "usage": {
+        "input_tokens": 29115,
+        "cached_input_tokens": 14336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 173,
+        "reasoning_output_tokens": 47
+      }
+    },
+    {
+      "scenario": "cancel-auto-review",
+      "approvalMode": "auto-review",
+      "exitCode": 1,
+      "outcome": "stopped",
+      "terminal": null,
+      "stopReason": "requested_cancel",
+      "treeStop": "command_succeeded",
+      "durationMs": 10692,
+      "schemaValid": false,
+      "agentStatus": null,
+      "mathUnchanged": true,
+      "check": 0,
+      "deniedFileExists": true,
+      "taskAccepted": null,
+      "heartbeatObserved": true,
+      "heartbeatStopped": true,
+      "toolProcessStopped": true,
+      "usage": null
+    }
+  ],
+  "sourceHashScope": "Post-verification source snapshot; stale-heartbeat preflight guard added after real cancellation probe."
+}

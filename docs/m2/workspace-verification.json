@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "requirementVersion": "M2-workspaces-v1",
+  "codeRevision": "79ec62254c421bd504f39f2288bb7dddab3a3ad9",
+  "date": "2026-10-19",
+  "implementationCommits": [
+    "a40afd0",
+    "79ec622"
+  ],
+  "realModelCalls": 0,
+  "localValidation": {
+    "platform": "win32",
+    "checks": [
+      {
+        "command": "npm run check",
+        "passed": true,
+        "tests": 104,
+        "failed": 0,
+        "skipped": 0,
+        "note": "Complete suite before adding the final fake-CLI integration test; production sources are unchanged."
+      },
+      {
+        "command": "node --test --test-name-pattern=\"registered implementation worktree reaches Codex\" test/workspace-access.test.ts",
+        "passed": true,
+        "tests": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run typecheck",
+        "passed": true
+      },
+      {
+        "command": "npm run format:check",
+        "passed": true
+      },
+      {
+        "command": "git diff --check",
+        "passed": true
+      }
+    ]
+  },
+  "coverage": [
+    "Original dirty checkout preserved; implementation starts at the recorded baseline.",
+    "Independent detached review snapshot stays pinned while implementation advances.",
+    "Durable creation intent is not replayed after an unknown Git outcome.",
+    "Cleanup requires terminal task, no active access, clean files including ignored content, and preserves branch history.",
+    "Repository policy, hooks, filters, index flags and path identity are checked before admission.",
+    "Duplicate writer access is rejected across SQLite connections; expiry and restart retain ownership until confirmed stop.",
+    "Permissions and requirement/code evidence are frozen; caller workspace paths are replaced with registered paths.",
+    "Cancellation during preparation prevents late process launch.",
+    "Snapshot tampering suppresses terminal evidence and marks the snapshot tainted.",
+    "Late events cannot reopen a failed stream; unknown process stop retains access.",
+    "Protected consultation runs through the controller without creating a branch.",
+    "Codex adapter receives the registered implementation worktree via a local fake CLI process."
+  ],
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "platforms": [
+      "windows-latest",
+      "ubuntu-latest"
+    ],
+    "evidenceBinding": "CI runs are keyed to the pushed commit. This local record does not assert a remote result.",
+    "priorRuns": [
+      {
+        "commit": "91349e545a29b155ac58461d2b94f75055bc7865",
+        "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39194357527",
+        "linux": "passed: 105 tests",
+        "windows": "104 passed, 1 failed, 0 skipped",
+        "cause": "The consultation fixture compared a canonical path with a Windows short-path alias. The assertion now compares realpath(repo), preserving repository identity and no-worktree checks. Production code was unchanged."
+      }
+    ]
+  },
+  "limitations": [
+    "No paid model calls or real target-project acceptance in M2.2.",
+    "HTTP and CLI service still expose only the simulation backend; M2.3 role handoff is not implemented.",
+    "Workspace locks are cooperative control-database ownership, not OS isolation. Native Codex sandbox permissions remain required.",
+    "Cross-service process reconciliation and automatic recovery of pending Git operations remain M3 work.",
+    "Git hooks/filters, fsmonitor, symlinks/submodules, hidden or sparse index entries require a separate trusted integration.",
+    "Real service enablement still requires auditing Codex MCP/hooks and controller-directory isolation."
+  ]
+}

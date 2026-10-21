@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "design": {
+      "role": "design",
+      "executor": "fake",
+      "provider": "simulation",
+      "model": "simulator-v1",
+      "permission": "read-only",
+      "native": {
+        "scenario": "success",
+        "delayMs": 20
+      },
+      "timeoutMs": 5000
+    },
+    "implement": {
+      "role": "implement",
+      "executor": "fake",
+      "provider": "simulation",
+      "model": "simulator-v1",
+      "permission": "read-only",
+      "native": {
+        "scenario": "success",
+        "delayMs": 20
+      },
+      "timeoutMs": 5000
+    },
+    "review": {
+      "role": "review",
+      "executor": "fake",
+      "provider": "simulation",
+      "model": "simulator-v1",
+      "permission": "read-only",
+      "native": {
+        "scenario": "success",
+        "delayMs": 20
+      },
+      "timeoutMs": 5000
+    }
+  },
+  "budget": {
+    "maxRuns": 4,
+    "maxTaskMs": 60000,
+    "maxIterations": 3
+  },
+  "leaseMs": 5000,
+  "maxArtifactBytes": 262144,
+  "maxLogBytes": 262144
+}

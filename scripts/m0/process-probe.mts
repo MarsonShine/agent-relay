@@ -11,7 +11,7 @@ export type ProbeResult = {
 // Experimental process observer, not the production Agent execution adapter.
 export async function probe(executable: string, args: string[], options: {
   cwd: string; input?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
-  cancelWhen?: (event: any) => boolean;
+  cancelWhen?: (event: any) => boolean; signal?: AbortSignal;
 }): Promise<ProbeResult> {
   const started = Date.now();
   const spawnOptions: SpawnOptions = {
@@ -73,12 +73,16 @@ export async function probe(executable: string, args: string[], options: {
   child.stdin!.on('error', () => {}); // Early config rejection may close stdin.
   child.stdin!.end(options.input ?? '');
   const timer = setTimeout(() => stop('timeout'), options.timeoutMs ?? 180000);
+  const onAbort = () => stop('requested_cancel');
   const [exitCode, signal] = await new Promise<[number | null, string | null]>((resolve) => {
     finish = resolve;
     child.on('error', error => { spawnError = error; });
     child.on('close', (code, signal) => resolve([code, signal]));
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    if (options.signal?.aborted) onAbort();
   });
   clearTimeout(timer);
+  options.signal?.removeEventListener('abort', onAbort);
   pending += decoder.end();
   if (pending.trim()) parseErrors.push('truncated JSONL line');
   const terminal = events.findLast(e => e.type === 'turn.completed' || e.type === 'turn.failed')?.type ?? null;
