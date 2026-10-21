@@ -3,7 +3,7 @@
 Use a registered repository and its trusted GitHub configuration. Import one issue by number and an idempotency key:
 
 ```text
-node dist/cli.js task import --repo <registered-repo> --issue <issue-number> --key <import-key> --data-dir <private-data-dir>
+node dist/cli.js task import --issue <issue-number> --key <import-key> --data-dir <private-data-dir>
 ```
 
 Read the returned task ID and use `task status <task-id>` until local `accepted` is true. Acceptance means the current local candidate passed its checks and independent review; it does not publish anything. Publish explicitly with the current task version:
