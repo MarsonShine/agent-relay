@@ -315,9 +315,11 @@ export class LocalWorkflow {
         ).trim();
       const candidateTree = await tree(result.resultRevision);
       const priorRevisions = [
-        workspace.baselineRevision,
+        task.codeRevision!,
         ...history.flatMap((h) =>
-          h.result.stage === 'implement' ? [h.result.resultRevision] : [],
+          h.result.stage === 'implement'
+            ? [h.evidence.codeRevision!, h.result.resultRevision]
+            : [],
         ),
       ];
       for (const revision of new Set(priorRevisions)) {
