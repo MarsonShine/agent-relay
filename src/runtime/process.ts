@@ -81,7 +81,7 @@ export class BoundedProcess {
       this.reason ??= 'process could not start';
     });
     this.child.stdin.on('error', () => {
-      this.reason ??= 'process input failed';
+      if (options.input.length > 0) this.reason ??= 'process input failed';
     });
     this.child.on('close', (code) => {
       this.closeSeen = true;
@@ -97,7 +97,8 @@ export class BoundedProcess {
     this.timer = setTimeout(() => {
       void this.stop('execution timeout');
     }, options.timeoutMs);
-    this.child.stdin.end(options.input);
+    if (options.input.length > 0) this.child.stdin.end(options.input);
+    else this.child.stdin.end();
   }
   private complete(exit: ProcessExit): void {
     if (this.result) return;

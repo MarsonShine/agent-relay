@@ -1,3 +1,4 @@
+import { BoundedProcess } from '../src/runtime/process.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -130,3 +131,34 @@ test('guardian startup consumes the deadline and reports timeout without launchi
   assert.match(exit.reason!, /timeout/);
   assert.equal(existsSync(effect), false);
 });
+
+for (const input of ['', 'required payload']) {
+  test(`closed stdin ${input ? 'rejects required input delivery' : 'does not invalidate an input-free command'}`, async (t) => {
+    const f = fixture(t);
+    const child = new BoundedProcess(
+      { executable: process.execPath },
+      [
+        '-e',
+        "process.stdin.resume();process.stdin.on('end',()=>process.exit(0))",
+      ],
+      {
+        cwd: f.directory,
+        env: process.env,
+        input,
+        timeoutMs: 5000,
+        maxBytes: 4096,
+        stdout: () => {},
+        stderr: () => {},
+      },
+    );
+    // Reproduce the fast-exit pipe error independently of OS scheduling.
+    child.child.stdin.emit(
+      'error',
+      Object.assign(new Error('closed pipe'), { code: 'EPIPE' }),
+    );
+    const exit = await child.done;
+    assert.equal(exit.stopped, true);
+    assert.equal(exit.code, 0);
+    assert.equal(exit.reason, input ? 'process input failed' : null);
+  });
+}
