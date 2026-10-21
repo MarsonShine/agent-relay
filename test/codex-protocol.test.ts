@@ -261,6 +261,10 @@ test('source evidence schema and prompt state the existing exact physical-line c
   const { execution } = codexFixture(t);
   const request = {
     ...execution,
+    run: {
+      ...execution.run,
+      inputDiagnostic: 'source excerpt does not match the recorded revision',
+    },
     task: { ...execution.task, stage: 'design' as const },
     handoff: {
       contractVersion: 'M2-handoff-v1' as const,
@@ -277,4 +281,6 @@ test('source evidence schema and prompt state the existing exact physical-line c
     /including blank lines and headings/,
   );
   assert.match(body.sourceEvidenceInstructions, /Do not estimate line numbers/);
+  assert.equal(body.previousControllerDiagnostic, request.run.inputDiagnostic);
+  assert.match(body.rejectedHandoffInstructions, /did NOT accept/);
 });

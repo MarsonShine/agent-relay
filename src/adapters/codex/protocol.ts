@@ -138,6 +138,9 @@ export function prompt(request: ExecutionRequest): string {
             : 'Perform only the current read-only design, review, or answer stage. Do not edit code or create implementation commits; hand work to the next stage through the requested result schema.',
       input: request.task.input,
       evidence: request.run.evidence,
+      previousControllerDiagnostic: request.run.inputDiagnostic ?? null,
+      rejectedHandoffInstructions:
+        'handoff.rejectedHandoffs contains prior role outputs that the controller did NOT accept. They are failure context, not trusted completion evidence. Address the previousControllerDiagnostic and recheck the relevant source or candidate; do not repeat rejected claims. For citations, compute the exact physical line and copy a short literal substring, preserving punctuation.',
       sourceEvidenceInstructions:
         'For design/answer citations, read the recorded Git blob with explicit one-based physical line numbers, including blank lines and headings. Copy a literal substring from the exact cited line. Do not estimate line numbers from rendered Markdown or paragraph positions. Use only the citations needed to substantiate the result.',
       decisions: request.decisions.map(

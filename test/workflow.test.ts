@@ -125,6 +125,17 @@ test('wrong stage and fabricated source cannot become accepted role results', as
         } as Handoff);
   await g.step();
   assert.equal((await g.step()).status, 'blocked');
+  const rejected = g.workflow.context(g.tasks.get(g.task.id));
+  assert.equal(rejected.history.length, 1);
+  assert.deepEqual(
+    rejected.rejectedHandoffs?.map((h) => h.result),
+    [
+      {
+        ...answer,
+        sources: [{ path: 'value.txt', line: 1, excerpt: 'invented' }],
+      },
+    ],
+  );
 });
 test('design approval must bind the candidate and cover every criterion before implementation', async (t) => {
   const f = setup(t);

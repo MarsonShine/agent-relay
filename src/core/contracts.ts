@@ -77,6 +77,7 @@ export const runSchema = z.strictObject({
   startedAt: z.number().int().nonnegative(),
   continuation: z.string().max(4_096).nullable(),
   outcome: z.string().max(128).nullable(),
+  inputDiagnostic: z.string().max(8192).nullable().optional(),
 });
 export type Run = z.infer<typeof runSchema>;
 export const eventSchema = z.strictObject({

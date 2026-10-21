@@ -190,6 +190,36 @@ export class LocalWorkflow {
       : (task.codeRevision ?? undefined);
   }
   context(task: Task): NonNullable<ExecutionRequest['handoff']> {
+    const history = this.history(task),
+      acceptedRuns = new Set(history.map((h) => h.runId));
+    const runs = new Runs(this.workspaces.tasks);
+    const rejectedHandoffs: HandoffRecord[] = [];
+    for (const artifact of this.evidence.list(task.id)) {
+      if (
+        artifact.kind !== 'result' ||
+        acceptedRuns.has(artifact.runId) ||
+        artifact.evidence.requirementVersion !== task.requirementVersion ||
+        artifact.evidence.codeRevision !== task.codeRevision ||
+        runs.get(artifact.runId).status !== 'stopped'
+      )
+        continue;
+      let parsed;
+      try {
+        parsed = handoffSchema.safeParse(
+          JSON.parse(this.evidence.read(artifact.id)),
+        );
+      } catch {
+        continue;
+      }
+      if (parsed.success && parsed.data.stage === task.stage)
+        rejectedHandoffs.push({
+          runId: artifact.runId,
+          taskId: task.id,
+          artifactId: artifact.id,
+          evidence: artifact.evidence,
+          result: parsed.data,
+        });
+    }
     const result = {
       contractVersion: 'M2-handoff-v1' as const,
       ...(this.implementationBase(task)
@@ -204,7 +234,8 @@ export class LocalWorkflow {
           target: 'draft-7',
         },
       ),
-      history: this.history(task),
+      history,
+      rejectedHandoffs: rejectedHandoffs.slice(-3),
       pendingFindings: this.pending(task, this.history(task)),
       validations: this.verifier
         .reports(task)

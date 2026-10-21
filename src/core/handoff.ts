@@ -163,6 +163,7 @@ export const handoffContextSchema = z.strictObject({
     .optional(),
   resultSchema: z.record(z.string(), z.unknown()),
   history: z.array(handoffRecordSchema).max(100),
+  rejectedHandoffs: z.array(handoffRecordSchema).max(3).optional(),
   validations: z
     .array(
       z.strictObject({

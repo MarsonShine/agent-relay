@@ -82,6 +82,7 @@ export class Runs {
         startedAt: now,
         continuation: null,
         outcome: null,
+        inputDiagnostic: task.diagnostic,
       });
       this.tasks.db.sql
         .prepare('INSERT INTO runs(id,task_id,document) VALUES(?,?,?)')
