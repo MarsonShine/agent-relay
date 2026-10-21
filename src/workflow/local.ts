@@ -46,6 +46,46 @@ export class LocalWorkflow {
         ? 'review'
         : 'design';
   }
+  async acceptance(task: Task): Promise<string[]> {
+    const issues = this.evidence.diagnose(task.id);
+    if (task.status !== 'succeeded')
+      issues.push('local workflow has not succeeded');
+    if (task.stage !== 'deliver') issues.push('task is not a code delivery');
+    if (
+      new Runs(this.workspaces.tasks)
+        .forTask(task.id)
+        .some((r) => r.status !== 'stopped') ||
+      this.workspaces.tasks.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id)
+    )
+      issues.push('execution ownership is not released');
+    try {
+      const history = this.history(task),
+        review = history.at(-1)?.result;
+      if (
+        review?.stage !== 'code_review' ||
+        review.verdict !== 'approve' ||
+        this.pending(task, history).length ||
+        !this.verifier.accepted(task)
+      )
+        issues.push(
+          'current candidate lacks complete independent review and trusted validation',
+        );
+      const workspace = this.workspaces
+        .list(task.id)
+        .find((w) => w.kind === 'implementation');
+      if (
+        !workspace ||
+        (await this.workspaces.git.verify(workspace, true)) !==
+          task.codeRevision
+      )
+        issues.push('delivered workspace changed');
+    } catch {
+      issues.push('local delivery evidence cannot be verified');
+    }
+    return issues;
+  }
   history(task: Task): HandoffRecord[] {
     return this.workspaces.tasks.db.sql
       .prepare('SELECT document FROM handoffs WHERE task_id=? ORDER BY rowid')
@@ -80,11 +120,25 @@ export class LocalWorkflow {
         id: string;
         origin: 'design' | 'implementation';
         description: string;
-        runId: string;
+        runId: string | null;
+        sourceKey?: string;
       }
     >();
     const accepted = new Set(history.map((h) => h.runId)),
       runs = new Runs(this.workspaces.tasks);
+    for (const decision of this.workspaces.tasks.decisions(task.id)) {
+      if (
+        decision.requirementVersion === task.requirementVersion &&
+        decision.obligation
+      )
+        pending.set(decision.obligation.id, {
+          id: decision.obligation.id,
+          origin: decision.obligation.origin,
+          description: decision.answer,
+          runId: null,
+          sourceKey: decision.obligation.sourceKey,
+        });
+    }
     for (const artifact of this.evidence.list(task.id)) {
       if (
         artifact.kind !== 'result' ||
@@ -136,8 +190,53 @@ export class LocalWorkflow {
       : (task.codeRevision ?? undefined);
   }
   context(task: Task): NonNullable<ExecutionRequest['handoff']> {
+    const history = this.history(task),
+      acceptedRuns = new Set(history.map((h) => h.runId));
+    const runs = new Runs(this.workspaces.tasks);
+    const reviewSubject =
+      task.stage === 'design_review'
+        ? 'design'
+        : task.stage === 'code_review'
+          ? 'implement'
+          : null;
+    const reviewSubjectRunId = reviewSubject
+      ? history.findLast((h) => h.result.stage === reviewSubject)?.runId
+      : undefined;
+    if (reviewSubject && !reviewSubjectRunId)
+      throw new RelayError(
+        'conflict',
+        'review requires an accepted subject handoff',
+      );
+    const rejectedHandoffs: HandoffRecord[] = [];
+    for (const artifact of this.evidence.list(task.id)) {
+      if (
+        artifact.kind !== 'result' ||
+        acceptedRuns.has(artifact.runId) ||
+        artifact.evidence.requirementVersion !== task.requirementVersion ||
+        artifact.evidence.codeRevision !== task.codeRevision ||
+        runs.get(artifact.runId).status !== 'stopped'
+      )
+        continue;
+      let parsed;
+      try {
+        parsed = handoffSchema.safeParse(
+          JSON.parse(this.evidence.read(artifact.id)),
+        );
+      } catch {
+        continue;
+      }
+      if (parsed.success && parsed.data.stage === task.stage)
+        rejectedHandoffs.push({
+          runId: artifact.runId,
+          taskId: task.id,
+          artifactId: artifact.id,
+          evidence: artifact.evidence,
+          result: parsed.data,
+        });
+    }
     const result = {
       contractVersion: 'M2-handoff-v1' as const,
+      ...(reviewSubjectRunId ? { reviewSubjectRunId } : {}),
       ...(this.implementationBase(task)
         ? { implementationBaseRevision: this.implementationBase(task)! }
         : {}),
@@ -145,12 +244,17 @@ export class LocalWorkflow {
         ? { allowedFiles: task.config.allowedFiles }
         : {}),
       resultSchema: z.toJSONSchema(
-        stageHandoffSchema(task.stage, this.implementationBase(task)),
+        stageHandoffSchema(
+          task.stage,
+          this.implementationBase(task),
+          reviewSubjectRunId,
+        ),
         {
           target: 'draft-7',
         },
       ),
-      history: this.history(task),
+      history,
+      rejectedHandoffs: rejectedHandoffs.slice(-3),
       pendingFindings: this.pending(task, this.history(task)),
       validations: this.verifier
         .reports(task)
@@ -168,6 +272,55 @@ export class LocalWorkflow {
           })),
         })),
     };
+    if (Buffer.byteLength(JSON.stringify(result)) > 1024 * 1024)
+      throw new RelayError('invalid', 'handoff context limit exceeded');
+    return result;
+  }
+  private async sourceIssues(
+    task: Task,
+    result: Handoff,
+    cache = new Map<string, string[]>(),
+  ): Promise<string[]> {
+    const sources =
+      result.stage === 'design'
+        ? result.evidence
+        : result.stage === 'answer'
+          ? result.sources
+          : [];
+    const issues: string[] = [];
+    for (const source of sources) {
+      let lines = cache.get(source.path);
+      if (!lines) {
+        try {
+          lines = (
+            await this.workspaces.git.command(task.repo, [
+              'show',
+              `${task.codeRevision}:${source.path}`,
+            ])
+          ).split(/\r?\n/);
+          cache.set(source.path, lines);
+        } catch {
+          issues.push(`${source.path}:${source.line}: source unavailable`);
+          continue;
+        }
+      }
+      if (!lines[source.line - 1]?.includes(source.excerpt))
+        issues.push(`${source.path}:${source.line}: excerpt mismatch`);
+    }
+    return issues;
+  }
+  async executionContext(
+    task: Task,
+  ): Promise<NonNullable<ExecutionRequest['handoff']>> {
+    const context = this.context(task),
+      cache = new Map<string, string[]>();
+    const rejectedDiagnostics = [];
+    for (const rejected of context.rejectedHandoffs ?? [])
+      rejectedDiagnostics.push({
+        runId: rejected.runId,
+        issues: await this.sourceIssues(task, rejected.result, cache),
+      });
+    const result = { ...context, rejectedDiagnostics };
     if (Buffer.byteLength(JSON.stringify(result)) > 1024 * 1024)
       throw new RelayError('invalid', 'handoff context limit exceeded');
     return result;
@@ -272,20 +425,12 @@ export class LocalWorkflow {
             ? 'implement'
             : 'design';
     } else if (result.stage === 'answer' || result.stage === 'design') {
-      for (const source of result.stage === 'answer'
-        ? result.sources
-        : result.evidence) {
-        const content = await this.workspaces.git.command(task.repo, [
-          'show',
-          `${task.codeRevision}:${source.path}`,
-        ]);
-        const lines = content.split(/\r?\n/);
-        if (!lines[source.line - 1]?.includes(source.excerpt))
-          throw new RelayError(
-            'invalid',
-            'source excerpt does not match the recorded revision',
-          );
-      }
+      const issues = await this.sourceIssues(task, result);
+      if (issues.length)
+        throw new RelayError(
+          'invalid',
+          `source excerpt does not match the recorded revision: ${issues.join('; ').slice(0, 7800)}`,
+        );
       stage = result.stage === 'answer' ? 'answer' : 'design_review';
       if (result.stage === 'answer') status = 'succeeded';
     } else if (result.stage === 'implement') {

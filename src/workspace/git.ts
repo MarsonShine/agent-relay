@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import { controllerTool } from '../runtime/controller-tools.ts';
 import { OwnedProcess, stopOwned } from '../runtime/owned-process.ts';
 import { checkLocalPolicies } from './policies.ts';
 import { execFile } from 'node:child_process';
@@ -83,7 +84,7 @@ export class GitWorktrees {
     const child = new OwnedProcess(
       join(this.recoveryRoot, `${workspace.id}-${operation}`),
       workspace.id,
-      { executable: 'git' },
+      { executable: controllerTool('git', [workspace.repo, workspace.path]) },
       ['--no-pager', '-C', workspace.repo, ...args],
       {
         cwd: workspace.repo,
@@ -134,7 +135,7 @@ export class GitWorktrees {
     );
     return new Promise((resolveResult, reject) => {
       const child = execFile(
-        'git',
+        controllerTool('git', [repo]),
         ['--no-pager', '-C', repo, ...args],
         {
           env: { ...env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },

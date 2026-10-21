@@ -1,0 +1,318 @@
+{
+  "schemaVersion": 1,
+  "contract": "M4-delivery-v1",
+  "verifiedControllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+  "deterministic": {
+    "command": "npm run check",
+    "revision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+    "typecheck": "passed",
+    "format": "passed",
+    "build": "passed",
+    "tests": 198,
+    "failed": 0,
+    "skipped": 0,
+    "os": "Windows",
+    "crossPlatformCI": {
+      "revision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+      "run": "https://github.com/MarsonShine/agent-relay/actions/runs/39571210996",
+      "windows": "success",
+      "ubuntu": "success"
+    },
+    "priorCrossPlatformRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+    "priorCrossPlatformCI": "https://github.com/MarsonShine/agent-relay/actions/runs/39545442563"
+  },
+  "m3Closure": {
+    "contract": "M3-closure-label-v1",
+    "workloadControllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+    "recheckedControllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+    "requirementVersion": 2,
+    "sourceRevision": "13d4e8eb2dc616254a6528e04db3cc2fb0db2267",
+    "candidateRevision": "e8d47f6dd681ebf2a6df36bf9b32c6a4ca2a64e5",
+    "acceptedAfterReopening": true,
+    "sourceUnchanged": true,
+    "allRunsStopped": true,
+    "occupancy": 0,
+    "pendingFindingsResolved": true,
+    "acceptanceCriteria": 4,
+    "reviewCoverage": 4,
+    "trustedChecks": [
+      {
+        "id": "label-contract",
+        "exitCode": 0
+      },
+      {
+        "id": "project-tests",
+        "exitCode": 0
+      }
+    ],
+    "attempts": 6,
+    "originalFailedTaskRetained": true
+  },
+  "realIntegration": {
+    "issue": "https://github.com/MarsonShine/agent-relay/issues/4",
+    "issueId": 5954581810,
+    "taskId": "3a998b4c-4da3-4c74-9a7a-07e496a3c54d",
+    "sourceVersion": "5feb0c5dd46692dc46d4b5775b00ddb195c49b5dd09a64c9835255c46b26af41",
+    "targetBase": "codex/m4-integration-base-20261021",
+    "targetBaseRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+    "requirementVersion": 1,
+    "candidateRevision": "6c8f546379d80ab3604144e6c11b58091798dd72",
+    "prepublicationCandidateRevision": "0688b0e271fde007d428c79d3e8179a8491731db",
+    "taskStatus": "succeeded",
+    "stage": "deliver",
+    "runsUsed": 13,
+    "deadlineAt": 1792586990767,
+    "accepted": true,
+    "delivered": true,
+    "pr": 5,
+    "prUrl": "https://github.com/MarsonShine/agent-relay/pull/5",
+    "branch": "codex/task-3a998b4c-4da3-4c74-9a7a-07e496a3c54d/delivery",
+    "headRevision": "6c8f546379d80ab3604144e6c11b58091798dd72",
+    "baseRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+    "changedFiles": [
+      "examples/m4-feedback.md"
+    ],
+    "merged": false,
+    "prepublicationFinding": {
+      "obligation": "G-d3d014f9-762e-49a1-bc6c-039e50313a24",
+      "candidate": "a5a00fc957c2ae7b0811abb6dff4e6d8880c1bb1",
+      "defect": "task import example passed unsupported --repo; candidate withheld",
+      "fixedCandidate": "0688b0e271fde007d428c79d3e8179a8491731db",
+      "independentResolution": true
+    },
+    "feedback": {
+      "kind": "implementation",
+      "commentId": 6312459503,
+      "obligation": "G-93ecc6a0-6849-49cf-91c1-ff8b0455003b",
+      "applied": true,
+      "updatedCandidate": "6c8f546379d80ab3604144e6c11b58091798dd72",
+      "independentResolution": true
+    },
+    "finalCI": {
+      "revision": "6c8f546379d80ab3604144e6c11b58091798dd72",
+      "state": "passed",
+      "checks": [
+        {
+          "name": "check (windows-latest)",
+          "conclusion": "success"
+        },
+        {
+          "name": "check (ubuntu-latest)",
+          "conclusion": "success"
+        }
+      ],
+      "workflowRuns": [
+        "https://github.com/MarsonShine/agent-relay/actions/runs/39576620851",
+        "https://github.com/MarsonShine/agent-relay/actions/runs/39576630403"
+      ]
+    },
+    "transientPrHeadLag": {
+      "observed": true,
+      "recoveredWith": "task reconcile-delivery",
+      "replayedPush": false,
+      "replayedPullRequestPost": false
+    },
+    "quarantinedOriginal": {
+      "taskId": "5977750f-b61d-4c90-8eba-456fb9da9868",
+      "attempt": 8,
+      "status": "unknown",
+      "occupancy": 1,
+      "replayed": false,
+      "pr": null
+    },
+    "attempts": [
+      18,
+      19,
+      20,
+      21
+    ]
+  },
+  "campaign": {
+    "model": "gpt-6-luna",
+    "maxCallMs": 180000,
+    "priorAttempts": 9,
+    "maxNewAttempts": 24,
+    "maxCumulativeAttempts": 33,
+    "newAttemptsUsed": 21,
+    "cumulativeAttemptsUsed": 30,
+    "monetaryCost": "unknown",
+    "attempts": [
+      {
+        "number": 1,
+        "campaign": "closure",
+        "stage": "triage",
+        "requirementVersion": 1,
+        "controllerRevision": "27d7c99cb5644bb7b5894b15de561b222ab56911",
+        "outcome": "waiting_user"
+      },
+      {
+        "number": 2,
+        "campaign": "closure",
+        "stage": "triage",
+        "requirementVersion": 2,
+        "controllerRevision": "27d7c99cb5644bb7b5894b15de561b222ab56911",
+        "outcome": "blocked"
+      },
+      {
+        "number": 3,
+        "campaign": "closure",
+        "stage": "triage",
+        "requirementVersion": 2,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "queued"
+      },
+      {
+        "number": 4,
+        "campaign": "closure",
+        "stage": "implement",
+        "requirementVersion": 2,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "blocked"
+      },
+      {
+        "number": 5,
+        "campaign": "closure",
+        "stage": "implement",
+        "requirementVersion": 2,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "queued"
+      },
+      {
+        "number": 6,
+        "campaign": "closure",
+        "stage": "code_review",
+        "requirementVersion": 2,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "succeeded"
+      },
+      {
+        "number": 7,
+        "campaign": "integration",
+        "stage": "triage",
+        "requirementVersion": 1,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "queued"
+      },
+      {
+        "number": 8,
+        "campaign": "integration",
+        "stage": "implement",
+        "requirementVersion": 1,
+        "controllerRevision": "7b01e3705953b8f68300787e31d538d49dc826a1",
+        "outcome": "unknown_after_host_interruption"
+      },
+      {
+        "number": 9,
+        "campaign": "integration-isolated",
+        "stage": "triage",
+        "requirementVersion": 1,
+        "controllerRevision": "aa2330b919e1f070d3f270a7fccdf7d9d5a8873c",
+        "outcome": "queued"
+      },
+      {
+        "number": 10,
+        "campaign": "integration-isolated",
+        "stage": "design",
+        "requirementVersion": 1,
+        "controllerRevision": "aa2330b919e1f070d3f270a7fccdf7d9d5a8873c",
+        "outcome": "blocked"
+      },
+      {
+        "number": 11,
+        "campaign": "integration-isolated",
+        "stage": "design",
+        "requirementVersion": 1,
+        "controllerRevision": "191080d6cb02f8649c9fc361cd42bc16df4ffa4f",
+        "outcome": "blocked"
+      },
+      {
+        "number": 12,
+        "campaign": "integration-isolated",
+        "stage": "design",
+        "requirementVersion": 1,
+        "controllerRevision": "29a6d6720eaf6a840d1e97135e952e24c9f01566",
+        "outcome": "blocked"
+      },
+      {
+        "number": 13,
+        "campaign": "integration-isolated",
+        "stage": "design",
+        "requirementVersion": 1,
+        "controllerRevision": "a89fa8b5e232e26ffd3e7c65a300a89760e58958",
+        "outcome": "queued"
+      },
+      {
+        "number": 14,
+        "campaign": "integration-isolated",
+        "stage": "design_review",
+        "requirementVersion": 1,
+        "controllerRevision": "a89fa8b5e232e26ffd3e7c65a300a89760e58958",
+        "outcome": "blocked"
+      },
+      {
+        "number": 15,
+        "campaign": "integration-isolated",
+        "stage": "design_review",
+        "requirementVersion": 1,
+        "controllerRevision": "d115a4d5a76020d340da64ce62e738df94c3df20",
+        "outcome": "queued"
+      },
+      {
+        "number": 16,
+        "campaign": "integration-isolated",
+        "stage": "implement",
+        "requirementVersion": 1,
+        "controllerRevision": "d115a4d5a76020d340da64ce62e738df94c3df20",
+        "outcome": "queued"
+      },
+      {
+        "number": 17,
+        "campaign": "integration-isolated",
+        "stage": "code_review",
+        "requirementVersion": 1,
+        "controllerRevision": "d115a4d5a76020d340da64ce62e738df94c3df20",
+        "outcome": "succeeded",
+        "note": "model review missed unsupported --repo; candidate not published"
+      },
+      {
+        "number": 18,
+        "campaign": "integration-isolated",
+        "stage": "implement",
+        "requirementVersion": 1,
+        "controllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+        "outcome": "queued"
+      },
+      {
+        "number": 19,
+        "campaign": "integration-isolated",
+        "stage": "code_review",
+        "requirementVersion": 1,
+        "controllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+        "outcome": "succeeded"
+      },
+      {
+        "number": 20,
+        "campaign": "integration-isolated",
+        "stage": "implement",
+        "requirementVersion": 1,
+        "controllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+        "outcome": "queued"
+      },
+      {
+        "number": 21,
+        "campaign": "integration-isolated",
+        "stage": "code_review",
+        "requirementVersion": 1,
+        "controllerRevision": "2d5b023c513f59931694b5fcb37e40e3dfae5944",
+        "outcome": "succeeded"
+      }
+    ]
+  },
+  "limits": [
+    "Native Codex real runs validated on Windows only.",
+    "The real GitHub chain used implementation-kind feedback; requirement-version upgrade and re-triage were verified on the new M3 business task and by deterministic M4 coverage.",
+    "A confirmed branch push can precede GitHub's PR head update; the delivery blocked and the documented reconcile restored watching without replaying the push or PR POST.",
+    "Original guardian loss without authentic stop proof remains quarantined and is not reported as recovered.",
+    "No automatic merge or force push."
+  ]
+}

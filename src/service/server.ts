@@ -1,4 +1,12 @@
 import { Intents } from '../storage/intents.ts';
+import { controllerTool } from '../runtime/controller-tools.ts';
+import { Sources } from '../github/source.ts';
+import { GitHubTransport } from '../github/transport.ts';
+import type { Transport } from '../github/transport.ts';
+import { GitPush } from '../github/push.ts';
+import type { Push } from '../github/push.ts';
+import { Deliveries } from '../github/delivery-store.ts';
+import { GitHubWorkflow } from '../github/workflow.ts';
 import { runtimeSchema } from './development.ts';
 import type { DevelopmentRuntime } from './development.ts';
 import { CodexExecutor } from '../adapters/codex/executor.ts';
@@ -50,7 +58,7 @@ const executeFile = promisify(execFile);
 async function revision(repo: string): Promise<string | null> {
   try {
     const { stdout } = await executeFile(
-      'git',
+      controllerTool('git', [repo]),
       ['rev-parse', '--verify', 'HEAD'],
       { cwd: repo, windowsHide: true, timeout: 5_000, maxBuffer: 4096 },
     );
@@ -73,6 +81,8 @@ export async function startService(options: {
   config?: Config;
   autoSchedule?: boolean;
   development?: DevelopmentRuntime;
+  githubTransport?: Transport;
+  githubPush?: Push;
 }) {
   const config = configSchema.parse(options.config ?? defaultConfig());
   const directory = await destination(options.directory);
@@ -137,12 +147,24 @@ export async function startService(options: {
     throw new RelayError('invalid', 'invalid port');
   const db = new Database(join(directory, 'state.db'));
   const tasks = new Tasks(db, [token]);
+  const transport =
+    options.githubTransport ??
+    new GitHubTransport(runtime ? [runtime.repo, runtime.workspaces] : []);
+  const sources = new Sources(tasks, transport);
+  const deliveries = new Deliveries(tasks, transport);
   const evidence = new Evidence(tasks, join(directory, 'evidence'), [token]);
   const workspaces = runtime
     ? new Workspaces(tasks, runtime.workspaces)
     : undefined;
   const workflow = workspaces
     ? new LocalWorkflow(workspaces, evidence)
+    : undefined;
+  const github = workflow
+    ? new GitHubWorkflow(
+        deliveries,
+        options.githubPush ?? new GitPush(join(directory, 'github-push')),
+        workflow,
+      )
     : undefined;
   if (
     registeredRepo &&
@@ -181,6 +203,21 @@ export async function startService(options: {
         `http://127.0.0.1:${listeningPort}`,
       );
       const method = request.method;
+      if (url.pathname === '/v1/github/import' && method === 'POST') {
+        if (!runtime || !registeredRepo)
+          throw new RelayError(
+            'invalid',
+            'GitHub import requires development runtime',
+          );
+        const task = await sources.import(
+          await jsonBody(request),
+          registeredRepo,
+          (await revision(registeredRepo))!,
+          config,
+        );
+        send(response, 200, { task, source: sources.get(task.id) });
+        return;
+      }
       if (url.pathname === '/v1/health' && method === 'GET') {
         send(response, 200, {
           backend: runtime ? 'codex-cli' : 'simulation',
@@ -216,11 +253,25 @@ export async function startService(options: {
         send(response, 200, { task });
         return;
       }
-      const route = /^\/v1\/tasks\/([^/]+)(?:\/(events|commands))?$/.exec(
-        url.pathname,
-      );
+      const route =
+        /^\/v1\/tasks\/([^/]+)(?:\/(events|commands|delivery))?$/.exec(
+          url.pathname,
+        );
       if (route) {
         const id = idSchema.parse(route[1]);
+        if (route[2] === 'delivery' && method === 'POST') {
+          if (!github)
+            throw new RelayError(
+              'invalid',
+              'delivery requires development runtime',
+            );
+          await github.command(id, await jsonBody(request));
+          send(response, 200, {
+            task: tasks.get(id),
+            delivery: deliveries.get(id),
+          });
+          return;
+        }
         if (!route[2] && method === 'GET') {
           const task = tasks.get(id);
           const issues = evidence.diagnose(id);
@@ -242,24 +293,25 @@ export async function startService(options: {
             task.stage === 'deliver' &&
             task.status === 'succeeded'
           ) {
-            if (!workflow?.verifier.accepted(task))
-              issues.push('current candidate lacks intact trusted validation');
-            try {
-              const w = workspaces
-                ?.list(task.id)
-                .find((w) => w.kind === 'implementation');
-              if (
-                !w ||
-                (await workspaces!.git.verify(w, true)) !== task.codeRevision
-              )
-                issues.push('delivered workspace changed');
-            } catch {
-              issues.push('delivered workspace cannot be verified');
-            }
+            issues.push(
+              ...(workflow
+                ? await workflow.acceptance(task)
+                : ['development workflow unavailable']),
+            );
           }
           send(response, 200, {
             task,
+            source: sources.get(id),
+            delivery: deliveries.get(id),
+            deliveryIntent: deliveries.get(id)
+              ? deliveries.intent(deliveries.get(id)!.current)
+              : null,
+            deliveryCI: github?.poller.ci(id) ?? null,
+            inbox: github?.poller.inbox(id) ?? [],
+            delivered:
+              deliveries.get(id)?.status === 'complete' && issues.length === 0,
             requirements: tasks.requirements(id),
+            budgetChanges: tasks.budgetChanges(id),
             questions: tasks.questions(id),
             ...(workflow
               ? {
@@ -371,6 +423,7 @@ export async function startService(options: {
   const pump = async () => {
     try {
       await controller.tick();
+      await github?.tick();
     } catch {
       schedulerError =
         'scheduler halted; inspect database and outstanding runs before restarting';
@@ -387,6 +440,7 @@ export async function startService(options: {
     port: listeningPort,
     tasks,
     controller,
+    github,
     evidence,
     close(): Promise<void> {
       closing ??= (async () => {
@@ -395,6 +449,7 @@ export async function startService(options: {
           server.close((error) => (error ? reject(error) : resolve()));
           server.closeIdleConnections();
         });
+        await github?.close();
         await controller.close();
         db.close();
       })();

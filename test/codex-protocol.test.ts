@@ -170,6 +170,16 @@ test('development output is a current-stage object, independent of the design ro
     scope: [],
     simpleReason: null,
   };
+  const triagePrompt = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(triagePrompt.invocationGoal, /read-only triage only/);
+  assert.match(
+    triagePrompt.invocationGoal,
+    /Do not implement or commit in triage/,
+  );
+  assert.match(
+    triagePrompt.invocationGoal,
+    /separate later implementation invocation/,
+  );
   assert.equal(
     JSON.parse(parseFinal(request, { ...base, output }).output!).stage,
     'triage',
@@ -245,4 +255,82 @@ test('native implementation handoff distinguishes unfinished work from retained 
   assert.deepEqual(JSON.parse(parsed.output!).unresolved, [
     'actual unfinished work',
   ]);
+});
+
+test('source evidence schema and prompt state the existing exact physical-line contract', (t) => {
+  const { execution } = codexFixture(t);
+  const request = {
+    ...execution,
+    run: {
+      ...execution.run,
+      inputDiagnostic: 'source excerpt does not match the recorded revision',
+    },
+    task: { ...execution.task, stage: 'design' as const },
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      resultSchema: {},
+      history: [],
+    },
+  };
+  const schema = JSON.stringify(jsonSchemaFor(request));
+  assert.match(schema, /One-based physical line number/);
+  assert.match(schema, /Verbatim substring of that exact single line/);
+  const body = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(
+    body.sourceEvidenceInstructions,
+    /including blank lines and headings/,
+  );
+  assert.match(body.sourceEvidenceInstructions, /Do not estimate line numbers/);
+  assert.equal(body.previousControllerDiagnostic, request.run.inputDiagnostic);
+  assert.match(body.rejectedHandoffInstructions, /did NOT accept/);
+});
+
+test('native review schema pins the controller-selected subject without supplying a verdict', (t) => {
+  const { execution } = codexFixture(t);
+  const subject = '11111111-1111-4111-8111-111111111111';
+  const request = {
+    ...execution,
+    task: { ...execution.task, stage: 'code_review' as const },
+    handoff: {
+      contractVersion: 'M2-handoff-v1' as const,
+      resultSchema: {},
+      history: [],
+      reviewSubjectRunId: subject,
+    },
+  };
+  const output = {
+    stage: 'code_review',
+    subjectRunId: subject,
+    resolutions: [],
+    verdict: 'approve',
+    coverage: [{ criterionId: 'A1', proof: 'fixture review' }],
+    findings: [],
+  };
+  const result = {
+    schemaVersion: 1,
+    status: 'completed',
+    evidence: execution.run.evidence,
+    output,
+    question: null,
+    diagnostic: null,
+  };
+  assert.equal(
+    JSON.parse(parseFinal(request, result).output!).subjectRunId,
+    subject,
+  );
+  assert.throws(() =>
+    parseFinal(request, {
+      ...result,
+      output: { ...output, subjectRunId: execution.run.id },
+    }),
+  );
+  const body = JSON.parse(prompt(request).split('\n').at(-1)!);
+  assert.match(
+    body.reviewInstructions,
+    /Triage defines the acceptance criteria but is not the review subject/,
+  );
+  assert.match(
+    JSON.stringify(jsonSchemaFor(request)),
+    /11111111-1111-4111-8111-111111111111/,
+  );
 });

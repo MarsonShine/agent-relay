@@ -7,6 +7,7 @@ import {
   decisionSchema,
   eventSchema,
   taskSchema,
+  budgetAmendmentSchema,
 } from '../core/contracts.ts';
 import type {
   Command,
@@ -45,7 +46,11 @@ export class Tasks {
       taskSchema.parse(JSON.parse(String(row.document))),
     );
   }
-  create(value: CreateTask, now = Date.now()): Task {
+  create(
+    value: CreateTask,
+    now = Date.now(),
+    persist?: (task: Task) => void,
+  ): Task {
     const input = createTaskSchema.parse(value);
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(input))
@@ -55,6 +60,11 @@ export class Tasks {
         .prepare('SELECT id, fingerprint FROM tasks WHERE request_key=?')
         .get(input.requestKey);
       if (existing) {
+        if (persist)
+          throw new RelayError(
+            'conflict',
+            'atomic source creation cannot reuse an existing task',
+          );
         if (existing.fingerprint !== fingerprint)
           throw new RelayError(
             'conflict',
@@ -88,6 +98,7 @@ export class Tasks {
         )
         .run(task.id, input.requestKey, fingerprint, JSON.stringify(task));
       this.recordRequirement(task, 'created');
+      persist?.(task);
       this.append(
         task.id,
         null,
@@ -126,6 +137,64 @@ export class Tasks {
           'conflict',
           'task version changed; read status before retrying',
         );
+      if (command.action === 'budget') {
+        if (
+          ![
+            'queued',
+            'waiting_user',
+            'paused',
+            'blocked',
+            'succeeded',
+          ].includes(task.status) ||
+          task.control ||
+          Date.now() >= task.deadlineAt ||
+          command.maxRuns <= task.config.budget.maxRuns ||
+          command.maxRuns <= task.runsUsed ||
+          this.db.sql
+            .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+            .get(id) ||
+          this.db.sql
+            .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+            .get(id)
+        )
+          throw new RelayError(
+            'conflict',
+            'budget amendment requires stopped ownership, remaining original time and a strictly higher finite run limit',
+          );
+        const saved = this.save(task, {
+          ...task,
+          config: {
+            ...task.config,
+            budget: { ...task.config.budget, maxRuns: command.maxRuns },
+          },
+        });
+        const audit = budgetAmendmentSchema.parse({
+          schemaVersion: 1,
+          taskId: id,
+          taskVersion: saved.version,
+          source: 'local-user',
+          approval: command.approval,
+          previousBudget: task.config.budget,
+          budget: saved.config.budget,
+          runsUsed: task.runsUsed,
+          iterationsUsed: task.iterationsUsed,
+          infrastructureRetriesUsed: task.infrastructureRetriesUsed,
+          deadlineAt: task.deadlineAt,
+          requirementVersion: task.requirementVersion,
+          codeRevision: task.codeRevision,
+        });
+        this.db.sql
+          .prepare('INSERT INTO budget_amendments VALUES(?,?,?)')
+          .run(id, saved.version, JSON.stringify(audit));
+        this.append(
+          id,
+          null,
+          `budget:${saved.version}`,
+          'task.run_budget_amended',
+          `run limit ${task.config.budget.maxRuns} -> ${command.maxRuns}; private audit version ${saved.version}; counters and deadline unchanged`,
+        );
+        return saved;
+      }
       if (terminal.has(task.status))
         throw new RelayError('conflict', 'terminal tasks cannot be changed');
       let next: Task = { ...task };
@@ -238,9 +307,96 @@ export class Tasks {
     });
   }
   // History writes share the task/Run transition transaction.
+  feedbackInside(
+    task: Task,
+    kind: 'requirement' | 'implementation' | 'design',
+    text: string,
+    source: 'github-feedback' | 'github-ci' | 'local-user',
+    sourceKey: string,
+  ): Task {
+    const delivery = this.db.sql
+      .prepare('SELECT document FROM deliveries WHERE task_id=?')
+      .get(task.id);
+    const eligible =
+      source === 'local-user'
+        ? kind !== 'requirement' &&
+          !delivery &&
+          !!this.db.sql
+            .prepare('SELECT 1 FROM github_sources WHERE task_id=?')
+            .get(task.id)
+        : !!delivery &&
+          JSON.parse(String(delivery.document)).status === 'watching';
+    if (
+      task.status !== 'succeeded' ||
+      task.stage !== 'deliver' ||
+      !eligible ||
+      this.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(task.id) ||
+      this.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id) ||
+      task.iterationsUsed >= task.config.budget.maxIterations ||
+      task.runsUsed >= task.config.budget.maxRuns ||
+      Date.now() >= task.deadlineAt
+    )
+      throw new RelayError(
+        'conflict',
+        'feedback requires idle accepted delivery within original budgets',
+      );
+    const decisionId = randomUUID();
+    const decision = decisionSchema.parse({
+      schemaVersion: 1,
+      id: decisionId,
+      taskId: task.id,
+      ...(kind === 'requirement'
+        ? {}
+        : { obligation: { id: `G-${decisionId}`, origin: kind, sourceKey } }),
+      question: {
+        id: randomUUID(),
+        version: task.requirementVersion,
+        text: `Authorized ${source}: ${kind}`,
+      },
+      answer: text,
+      source,
+      requirementVersion:
+        task.requirementVersion + (kind === 'requirement' ? 1 : 0),
+    });
+    if (this.decisions(task.id).length >= 100)
+      throw new RelayError('conflict', 'decision history limit reached');
+    this.db.sql
+      .prepare('INSERT INTO decisions VALUES(?,?,?)')
+      .run(decision.id, task.id, JSON.stringify(decision));
+    const next = this.save(task, {
+      ...task,
+      requirementVersion: decision.requirementVersion,
+      input:
+        kind === 'requirement'
+          ? `${task.input}\n\nAuthorized requirement update:\n${text}`
+          : task.input,
+      status: 'queued',
+      stage:
+        kind === 'requirement'
+          ? 'triage'
+          : kind === 'design'
+            ? 'design'
+            : 'implement',
+      iterationsUsed: task.iterationsUsed + 1,
+      diagnostic: null,
+    });
+    if (kind === 'requirement') this.recordRequirement(next, 'github-feedback');
+    this.append(
+      task.id,
+      null,
+      `feedback:${decision.id}`,
+      'task.feedback',
+      `${kind}:${next.requirementVersion}`,
+    );
+    return next;
+  }
   private recordRequirement(
     task: Task,
-    source: 'created' | 'answer' | 'revise',
+    source: 'created' | 'answer' | 'revise' | 'github-feedback',
   ): void {
     const record = requirementRecordSchema.parse({
       taskId: task.id,
@@ -360,5 +516,18 @@ export class Tasks {
       .prepare('SELECT document FROM decisions WHERE task_id=? ORDER BY rowid')
       .all(id)
       .map((row) => decisionSchema.parse(JSON.parse(String(row.document))));
+  }
+  budgetChanges(id: string) {
+    return this.db.sql
+      .prepare(
+        'SELECT document FROM budget_amendments WHERE task_id=? ORDER BY task_version',
+      )
+      .all(id)
+      .map((row) => {
+        const record = budgetAmendmentSchema.parse(
+          JSON.parse(String(row.document)),
+        );
+        return { ...record, approval: redact(record.approval, this.secrets) };
+      });
   }
 }

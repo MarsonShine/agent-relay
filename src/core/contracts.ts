@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { configSchema, profileSchema } from './config.ts';
+import { configSchema, profileSchema, budgetSchema } from './config.ts';
 
 export const idSchema = z.uuid();
 export const versionSchema = z.number().int().positive();
@@ -77,6 +77,7 @@ export const runSchema = z.strictObject({
   startedAt: z.number().int().nonnegative(),
   continuation: z.string().max(4_096).nullable(),
   outcome: z.string().max(128).nullable(),
+  inputDiagnostic: z.string().max(8192).nullable().optional(),
 });
 export type Run = z.infer<typeof runSchema>;
 export const eventSchema = z.strictObject({
@@ -126,7 +127,14 @@ export const decisionSchema = z.strictObject({
   taskId: idSchema,
   question: questionSchema,
   answer: z.string().min(1).max(32_768),
-  source: z.literal('local-user'),
+  source: z.enum(['local-user', 'github-feedback', 'github-ci']),
+  obligation: z
+    .strictObject({
+      id: z.string().min(1).max(128),
+      origin: z.enum(['implementation', 'design']),
+      sourceKey: z.string().min(1).max(512),
+    })
+    .optional(),
   requirementVersion: versionSchema,
 });
 export type Decision = z.infer<typeof decisionSchema>;
@@ -134,7 +142,13 @@ export const requirementRecordSchema = z.strictObject({
   taskId: idSchema,
   requirementVersion: versionSchema,
   input: z.string().min(1).max(32768),
-  source: z.enum(['created', 'answer', 'revise', 'imported']),
+  source: z.enum([
+    'created',
+    'answer',
+    'revise',
+    'imported',
+    'github-feedback',
+  ]),
 });
 export const questionRecordSchema = z.strictObject({
   taskId: idSchema,
@@ -154,6 +168,16 @@ export const createTaskSchema = z.strictObject({
 export type CreateTask = z.infer<typeof createTaskSchema>;
 export const commandSchema = z.discriminatedUnion('action', [
   z.strictObject({
+    action: z.literal('budget'),
+    expectedVersion: versionSchema,
+    maxRuns: z.number().int().positive().max(100),
+    approval: z
+      .string()
+      .min(1)
+      .max(2048)
+      .refine((s) => s.trim().length > 0),
+  }),
+  z.strictObject({
     action: z.literal('revise'),
     expectedVersion: versionSchema,
     requirementVersion: versionSchema,
@@ -172,3 +196,18 @@ export const commandSchema = z.discriminatedUnion('action', [
   }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
+export const budgetAmendmentSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  taskId: idSchema,
+  taskVersion: versionSchema,
+  source: z.literal('local-user'),
+  approval: z.string().min(1).max(2048),
+  previousBudget: budgetSchema,
+  budget: budgetSchema,
+  runsUsed: z.number().int().nonnegative(),
+  iterationsUsed: z.number().int().nonnegative(),
+  infrastructureRetriesUsed: z.number().int().nonnegative(),
+  deadlineAt: z.number().int().positive(),
+  requirementVersion: versionSchema,
+  codeRevision: revisionSchema,
+});

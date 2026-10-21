@@ -194,7 +194,7 @@ export class Controller {
         task,
         run,
         ...(task.kind === 'development'
-          ? { handoff: this.workflow!.context(task) }
+          ? { handoff: await this.workflow!.executionContext(task) }
           : {}),
         decisions: this.tasks.decisions(task.id),
         artifacts: this.evidence
@@ -206,6 +206,24 @@ export class Controller {
               artifact.evidence.codeRevision === task.codeRevision,
           ),
       });
+      const currentRun = this.runs.get(run.id),
+        currentTask = this.tasks.get(run.taskId);
+      if (
+        detached ||
+        currentRun.status !== 'active' ||
+        currentRun.owner !== run.owner ||
+        currentRun.leaseUntil <= Date.now() ||
+        currentTask.status !== 'running' ||
+        currentTask.control ||
+        currentTask.requirementVersion !== run.evidence.requirementVersion ||
+        currentTask.codeRevision !== run.evidence.codeRevision ||
+        Date.now() >=
+          Math.min(task.deadlineAt, run.startedAt + run.profile.timeoutMs)
+      )
+        throw new RelayError(
+          'conflict',
+          'execution stopped or changed before backend launch',
+        );
       const handle = await this.executor.start(request);
       if (detached)
         throw new RelayError('conflict', 'execution start returned after stop');

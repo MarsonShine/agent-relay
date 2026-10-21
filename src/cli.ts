@@ -14,6 +14,10 @@ import { startService } from './service/server.ts';
 const help = `Agent Relay (simulation by default; explicit trusted development runtime required)
 node dist/cli.js serve [--data-dir DIR] [--config FILE] [--runtime FILE] [--port PORT]
 node dist/cli.js doctor [--data-dir DIR]
+node dist/cli.js task import --issue N --key KEY [--data-dir DIR]
+node dist/cli.js task publish|reconcile-delivery|complete-delivery|cancel-delivery ID --version N [--data-dir DIR]
+node dist/cli.js task feedback ID --version N --input JSON_FILE [--data-dir DIR]
+node dist/cli.js task budget ID --version N --max-runs N --input APPROVAL_FILE [--data-dir DIR]
 node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
 node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
@@ -21,7 +25,7 @@ node dist/cli.js task answer ID --version N --question ID --question-version N -
 node dist/cli.js task revise ID --version N --requirement-version N --input FILE [--data-dir DIR]
 node dist/cli.js task pause|resume|cancel ID --version N [--data-dir DIR]
 All output is JSON. Mutations require the task version returned by status.
-Development runtime permits bounded Codex calls in managed worktrees. No PR publication or automatic merge.`;
+Development runtime permits bounded Codex calls in managed worktrees. GitHub delivery requires a trusted policy and explicit publication; no automatic merge.`;
 function readInput(path: string): string {
   const stat = statSync(path);
   if (!stat.isFile() || stat.size > 131_072)
@@ -44,7 +48,9 @@ async function main(): Promise<void> {
       repo: { type: 'string' },
       input: { type: 'string' },
       key: { type: 'string' },
+      issue: { type: 'string' },
       version: { type: 'string' },
+      'max-runs': { type: 'string' },
       question: { type: 'string' },
       'question-version': { type: 'string' },
       'requirement-version': { type: 'string' },
@@ -122,7 +128,14 @@ async function main(): Promise<void> {
   if (group !== 'task')
     throw new RelayError('invalid', 'unknown command; use --help');
   let result: Record<string, unknown>;
-  if (action === 'create') {
+  if (action === 'import') {
+    validateOptions(['issue', 'key'], 2);
+    result = await callLocal(directory, '/v1/github/import', {
+      schemaVersion: 1,
+      issue: Number(requireOption('issue')),
+      requestKey: requireOption('key'),
+    });
+  } else if (action === 'create') {
     validateOptions(['repo', 'input', 'key'], 2);
     result = await callLocal(directory, '/v1/tasks', {
       schemaVersion: 1,
@@ -132,7 +145,28 @@ async function main(): Promise<void> {
     });
   } else {
     const taskId = idSchema.parse(id);
-    if (action === 'status') {
+    if (
+      [
+        'publish',
+        'reconcile-delivery',
+        'complete-delivery',
+        'cancel-delivery',
+        'feedback',
+      ].includes(action ?? '')
+    ) {
+      validateOptions(
+        action === 'feedback' ? ['version', 'input'] : ['version'],
+        3,
+      );
+      result = await callLocal(directory, `/v1/tasks/${taskId}/delivery`, {
+        schemaVersion: 1,
+        expectedVersion: Number(requireOption('version')),
+        action: action!.replace('-delivery', ''),
+        ...(action === 'feedback'
+          ? { feedback: JSON.parse(readInput(requireOption('input'))) }
+          : {}),
+      });
+    } else if (action === 'status') {
       validateOptions([], 3);
       result = await callLocal(directory, `/v1/tasks/${taskId}`);
     } else if (action === 'events') {
@@ -147,22 +181,30 @@ async function main(): Promise<void> {
       );
     } else {
       if (
-        !['answer', 'revise', 'pause', 'resume', 'cancel'].includes(
+        !['answer', 'revise', 'pause', 'resume', 'cancel', 'budget'].includes(
           action ?? '',
         )
       )
         throw new RelayError('invalid', 'unknown task action');
       validateOptions(
-        action === 'answer'
-          ? ['version', 'question', 'question-version', 'input']
-          : action === 'revise'
-            ? ['version', 'requirement-version', 'input']
-            : ['version'],
+        action === 'budget'
+          ? ['version', 'max-runs', 'input']
+          : action === 'answer'
+            ? ['version', 'question', 'question-version', 'input']
+            : action === 'revise'
+              ? ['version', 'requirement-version', 'input']
+              : ['version'],
         3,
       );
       const command = commandSchema.parse({
         action,
         expectedVersion: Number(requireOption('version')),
+        ...(action === 'budget'
+          ? {
+              maxRuns: Number(requireOption('max-runs')),
+              approval: readInput(requireOption('input')),
+            }
+          : {}),
         ...(action === 'revise'
           ? {
               requirementVersion: Number(requireOption('requirement-version')),

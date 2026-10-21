@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { githubPolicySchema } from '../github/contracts.ts';
 import { verificationPolicySchema } from '../verification/contracts.ts';
 import { fakeNativeSchema } from '../adapters/fake-config.ts';
 import { codexProfileSchema } from '../adapters/codex/config.ts';
@@ -25,6 +26,7 @@ export const budgetSchema = z.strictObject({
 export const configSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
+    github: githubPolicySchema.optional(),
     verification: verificationPolicySchema.optional(),
     allowedFiles: z
       .array(z.string().min(1).max(1024))

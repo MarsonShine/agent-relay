@@ -15,9 +15,19 @@ export const relativeFile = z
   );
 const sha = z.string().regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/);
 const source = z.strictObject({
-  path: relativeFile,
-  line: z.number().int().positive(),
-  excerpt: text,
+  path: relativeFile.describe(
+    'Repository-relative file at the supplied evidence.codeRevision.',
+  ),
+  line: z
+    .number()
+    .int()
+    .positive()
+    .describe(
+      'One-based physical line number in that Git blob, counting headings and blank lines. Read numbered source; never estimate paragraph positions.',
+    ),
+  excerpt: text.describe(
+    'Verbatim substring of that exact single line in the recorded Git blob. Do not paraphrase or combine lines.',
+  ),
 });
 const responses = z
   .array(
@@ -113,6 +123,7 @@ export const handoffSchema = z.discriminatedUnion('stage', [
 export function stageHandoffSchema(
   stage: string,
   implementationBaseRevision?: string,
+  reviewSubjectRunId?: string,
 ) {
   const schema = handoffSchema.options.find(
     (s) => s.shape.stage.safeParse(stage).success,
@@ -123,6 +134,15 @@ export function stageHandoffSchema(
     stage: z.literal(stage),
     ...(stage === 'implement' && implementationBaseRevision
       ? { baseRevision: z.literal(implementationBaseRevision) }
+      : {}),
+    ...(['design_review', 'code_review'].includes(stage) && reviewSubjectRunId
+      ? {
+          subjectRunId: z
+            .literal(reviewSubjectRunId)
+            .describe(
+              'Controller-selected latest accepted design or implementation under review; triage is not the review subject.',
+            ),
+        }
       : {}),
   });
 }
@@ -139,19 +159,31 @@ export const handoffContextSchema = z.strictObject({
   contractVersion: z.literal('M2-handoff-v1'),
   allowedFiles: z.array(relativeFile).max(100).optional(),
   implementationBaseRevision: sha.optional(),
+  reviewSubjectRunId: z.uuid().optional(),
   pendingFindings: z
     .array(
       z.strictObject({
         id: z.string().max(64),
         origin: z.enum(['design', 'implementation']),
         description: text,
-        runId: z.uuid(),
+        runId: z.uuid().nullable(),
+        sourceKey: z.string().max(512).optional(),
       }),
     )
     .max(100)
     .optional(),
   resultSchema: z.record(z.string(), z.unknown()),
   history: z.array(handoffRecordSchema).max(100),
+  rejectedHandoffs: z.array(handoffRecordSchema).max(3).optional(),
+  rejectedDiagnostics: z
+    .array(
+      z.strictObject({
+        runId: z.uuid(),
+        issues: z.array(z.string().max(2048)).max(30),
+      }),
+    )
+    .max(3)
+    .optional(),
   validations: z
     .array(
       z.strictObject({

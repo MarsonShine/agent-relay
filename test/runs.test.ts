@@ -190,3 +190,33 @@ test('cancel overrides retry and exhausted absolute deadline cannot schedule ano
   assert.equal(result.status, 'blocked');
   assert.equal(result.iterationsUsed, 0);
 });
+
+test('retry diagnostic is snapshotted before claim clears task status and survives reopening', (t) => {
+  const { tasks, path } = fixture(t),
+    task = tasks.create(request()),
+    runs = new Runs(tasks);
+  const first = runs.claim(task.id, 'fake-v1')!;
+  const blocked = runs.finish(first, {
+    status: 'blocked',
+    diagnostic: 'source excerpt mismatch',
+    question: null,
+    continuation: null,
+  });
+  const paused = tasks.command(task.id, {
+    action: 'pause',
+    expectedVersion: blocked.version,
+  });
+  tasks.command(task.id, { action: 'resume', expectedVersion: paused.version });
+  const next = runs.claim(task.id, 'fake-v1')!;
+  assert.equal(next.inputDiagnostic, 'source excerpt mismatch');
+  assert.equal(tasks.get(task.id).diagnostic, null);
+  const reopened = new Database(path);
+  try {
+    assert.equal(
+      new Runs(new Tasks(reopened)).get(next.id).inputDiagnostic,
+      'source excerpt mismatch',
+    );
+  } finally {
+    reopened.close();
+  }
+});

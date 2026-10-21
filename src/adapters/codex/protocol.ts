@@ -24,6 +24,7 @@ export function finalSchemaFor(request: ExecutionRequest) {
         output: stageHandoffSchema(
           request.task.stage,
           request.handoff?.implementationBaseRevision,
+          request.handoff?.reviewSubjectRunId,
         ).nullable(),
       })
     : finalSchema;
@@ -130,8 +131,27 @@ export function prompt(request: ExecutionRequest): string {
       resultSchema: jsonSchemaFor(request),
       role: request.run.profile.role,
       stage: request.task.stage,
+      invocationGoal:
+        request.task.stage === 'triage'
+          ? 'This invocation performs read-only triage only: inspect relevant context, classify the task, define acceptance criteria and allowed scope, and ask a genuine unresolved question if needed. Once requirements are clear, return the triage handoff with completed. Do not implement or commit in triage. Read-only permission is intentional and does not block triage; a separate later implementation invocation receives workspace-write permission.'
+          : request.task.stage === 'implement'
+            ? 'Implement the current approved scope, respond to every pending finding, and produce the required committed candidate or bounded evidence-backed dispute. Do not perform independent approval of your own work.'
+            : 'Perform only the current read-only design, review, or answer stage. Do not edit code or create implementation commits; hand work to the next stage through the requested result schema.',
       input: request.task.input,
       evidence: request.run.evidence,
+      previousControllerDiagnostic: request.run.inputDiagnostic ?? null,
+      ...(request.handoff?.reviewSubjectRunId
+        ? {
+            reviewInstructions:
+              'Review the accepted handoff.history entry identified by handoff.reviewSubjectRunId. Triage defines the acceptance criteria but is not the review subject. Evaluate the selected design or implementation, cover every criterion, and independently resolve all pending findings. The controller-supplied subject identifier does not imply approval.',
+          }
+        : {}),
+      sourceRejectionInstructions:
+        'handoff.rejectedDiagnostics identifies mismatched or unavailable source references in rejected outputs at the current recorded revision. It supplies no replacement citations. Read the relevant numbered Git blob and repair the new handoff; prior outputs remain unaccepted.',
+      rejectedHandoffInstructions:
+        'handoff.rejectedHandoffs contains prior role outputs that the controller did NOT accept. They are failure context, not trusted completion evidence. Address the previousControllerDiagnostic and recheck the relevant source or candidate; do not repeat rejected claims. For citations, compute the exact physical line and copy a short literal substring, preserving punctuation.',
+      sourceEvidenceInstructions:
+        'For design/answer citations, read the recorded Git blob with explicit one-based physical line numbers, including blank lines and headings. Copy a literal substring from the exact cited line. Do not estimate line numbers from rendered Markdown or paragraph positions. Use only the citations needed to substantiate the result.',
       decisions: request.decisions.map(
         ({ question, answer, requirementVersion }) => ({
           question: question.text,

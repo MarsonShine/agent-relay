@@ -1,0 +1,30 @@
+{
+  "github": {
+    "repository": "owner/project",
+    "repositoryId": 1,
+    "base": "codex/integration-base",
+    "publish": false,
+    "feedback": [
+      {
+        "id": 1,
+        "login": "owner",
+        "scopes": ["requirement", "implementation", "design"]
+      }
+    ],
+    "requiredChecks": [
+      {
+        "name": "check (windows-latest)",
+        "appId": 15368,
+        "codeStep": "Run npm run check"
+      },
+      {
+        "name": "check (ubuntu-latest)",
+        "appId": 15368,
+        "codeStep": "Run npm run check"
+      }
+    ],
+    "pollIntervalMs": 60000,
+    "maxPolls": 60,
+    "maxPages": 10
+  }
+}

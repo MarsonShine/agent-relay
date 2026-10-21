@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { controllerTool } from '../../runtime/controller-tools.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, isAbsolute } from 'node:path';
@@ -21,7 +22,7 @@ export async function isolatedPermissions(
   const cwd = await realpath(request.workspace.path);
   const git = async (args: string[]) =>
     (
-      await exec('git', ['-C', cwd, ...args], {
+      await exec(controllerTool('git', [cwd]), ['-C', cwd, ...args], {
         timeout: 5000,
         maxBuffer: 1048576,
         windowsHide: true,

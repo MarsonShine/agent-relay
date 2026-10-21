@@ -21,7 +21,7 @@ export async function callLocal(
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     redirect: 'error',
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(60_000),
   });
   const value = z
     .object({ schemaVersion: z.literal(1) })
