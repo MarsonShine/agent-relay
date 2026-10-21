@@ -45,7 +45,11 @@ export class Tasks {
       taskSchema.parse(JSON.parse(String(row.document))),
     );
   }
-  create(value: CreateTask, now = Date.now()): Task {
+  create(
+    value: CreateTask,
+    now = Date.now(),
+    persist?: (task: Task) => void,
+  ): Task {
     const input = createTaskSchema.parse(value);
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(input))
@@ -88,6 +92,7 @@ export class Tasks {
         )
         .run(task.id, input.requestKey, fingerprint, JSON.stringify(task));
       this.recordRequirement(task, 'created');
+      persist?.(task);
       this.append(
         task.id,
         null,

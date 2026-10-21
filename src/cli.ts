@@ -14,6 +14,7 @@ import { startService } from './service/server.ts';
 const help = `Agent Relay (simulation by default; explicit trusted development runtime required)
 node dist/cli.js serve [--data-dir DIR] [--config FILE] [--runtime FILE] [--port PORT]
 node dist/cli.js doctor [--data-dir DIR]
+node dist/cli.js task import --issue N --key KEY [--data-dir DIR]
 node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
 node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
       repo: { type: 'string' },
       input: { type: 'string' },
       key: { type: 'string' },
+      issue: { type: 'string' },
       version: { type: 'string' },
       question: { type: 'string' },
       'question-version': { type: 'string' },
@@ -122,7 +124,14 @@ async function main(): Promise<void> {
   if (group !== 'task')
     throw new RelayError('invalid', 'unknown command; use --help');
   let result: Record<string, unknown>;
-  if (action === 'create') {
+  if (action === 'import') {
+    validateOptions(['issue', 'key'], 2);
+    result = await callLocal(directory, '/v1/github/import', {
+      schemaVersion: 1,
+      issue: Number(requireOption('issue')),
+      requestKey: requireOption('key'),
+    });
+  } else if (action === 'create') {
     validateOptions(['repo', 'input', 'key'], 2);
     result = await callLocal(directory, '/v1/tasks', {
       schemaVersion: 1,

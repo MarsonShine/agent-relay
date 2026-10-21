@@ -55,6 +55,10 @@ const migrations = [
     task_id TEXT NOT NULL REFERENCES tasks(id), question_id TEXT NOT NULL, version INTEGER NOT NULL,
     document TEXT NOT NULL CHECK(json_valid(document)), PRIMARY KEY(task_id,question_id,version)
   ) STRICT;`,
+  `CREATE TABLE github_sources (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id), request_key TEXT NOT NULL UNIQUE,
+    document TEXT NOT NULL CHECK(json_valid(document))
+  ) STRICT;`,
 ];
 
 export class Database {

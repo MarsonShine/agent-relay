@@ -1,4 +1,6 @@
 import { Intents } from '../storage/intents.ts';
+import { Sources } from '../github/source.ts';
+import { GitHubTransport } from '../github/transport.ts';
 import { runtimeSchema } from './development.ts';
 import type { DevelopmentRuntime } from './development.ts';
 import { CodexExecutor } from '../adapters/codex/executor.ts';
@@ -137,6 +139,7 @@ export async function startService(options: {
     throw new RelayError('invalid', 'invalid port');
   const db = new Database(join(directory, 'state.db'));
   const tasks = new Tasks(db, [token]);
+  const sources = new Sources(tasks, new GitHubTransport());
   const evidence = new Evidence(tasks, join(directory, 'evidence'), [token]);
   const workspaces = runtime
     ? new Workspaces(tasks, runtime.workspaces)
@@ -181,6 +184,21 @@ export async function startService(options: {
         `http://127.0.0.1:${listeningPort}`,
       );
       const method = request.method;
+      if (url.pathname === '/v1/github/import' && method === 'POST') {
+        if (!runtime || !registeredRepo)
+          throw new RelayError(
+            'invalid',
+            'GitHub import requires development runtime',
+          );
+        const task = await sources.import(
+          await jsonBody(request),
+          registeredRepo,
+          (await revision(registeredRepo))!,
+          config,
+        );
+        send(response, 200, { task, source: sources.get(task.id) });
+        return;
+      }
       if (url.pathname === '/v1/health' && method === 'GET') {
         send(response, 200, {
           backend: runtime ? 'codex-cli' : 'simulation',
@@ -259,6 +277,7 @@ export async function startService(options: {
           }
           send(response, 200, {
             task,
+            source: sources.get(id),
             requirements: tasks.requirements(id),
             questions: tasks.questions(id),
             ...(workflow
