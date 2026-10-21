@@ -16,6 +16,8 @@ export const fakeProfileSchema = z.strictObject({
 });
 export const profileSchema = z.union([fakeProfileSchema, codexProfileSchema]);
 export const budgetSchema = z.strictObject({
+  maxInfrastructureRetries: z.number().int().min(0).max(10).optional(),
+  retryBaseMs: z.number().int().min(100).max(10000).optional(),
   maxRuns: finiteLimit(100),
   maxTaskMs: finiteLimit(86_400_000),
   maxIterations: z.number().int().min(0).max(10),

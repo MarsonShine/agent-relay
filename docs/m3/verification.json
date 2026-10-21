@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "requirementContract": "M3-20261021-v1",
+  "productionRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+  "localGate": {
+    "status": "passed",
+    "command": "npm run check",
+    "implementationRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+    "typecheck": "passed",
+    "format": "passed",
+    "build": "passed",
+    "tests": 151,
+    "passed": 151,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 252617.1698
+  },
+  "realTests": {
+    "model": "gpt-6-luna",
+    "originalMaxAttempts": 8,
+    "maxAttempts": 10,
+    "attemptsUsed": 9,
+    "attempt10Launched": false,
+    "budgetChanges": [
+      {
+        "source": "explicit-human-user",
+        "approvedAt": "2026-10-21T02:31:10.5507422Z",
+        "previousMaxCalls": 8,
+        "maxCalls": 10,
+        "callsUsedAtApproval": 7,
+        "reason": "User approved cumulative maximum 10 Luna attempts; retain history, counters, 180000 ms per call and acceptance gates."
+      }
+    ],
+    "maxCallMs": 180000,
+    "verifiedScenarios": 5,
+    "failedOrRejectedScenarios": 4,
+    "attempts": [
+      {
+        "number": 1,
+        "outcome": "launch-failed-before-cli",
+        "implementationRevision": "7e8f8f365d6926b9352656bce0fb59e68bf3a44a",
+        "requirementVersion": 1,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 2,
+        "outcome": "cancel-after-service-crash-verified",
+        "implementationRevision": "49a6f9dc8630d00d0aa38f34195f170c8ce13dd7",
+        "requirementVersion": 1,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 3,
+        "outcome": "question-and-zero-call-wait-verified",
+        "implementationRevision": "49a6f9dc8630d00d0aa38f34195f170c8ce13dd7",
+        "requirementVersion": 1,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 4,
+        "outcome": "answer-and-versioned-retriage-verified",
+        "implementationRevision": "49a6f9dc8630d00d0aa38f34195f170c8ce13dd7",
+        "requirementVersion": 2,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 5,
+        "outcome": "candidate-and-trusted-check-verified",
+        "implementationRevision": "8e415214ccf11d6d62aa786c2eda21e30ea2e631",
+        "requirementVersion": 2,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 6,
+        "outcome": "review-false-positive-preserved",
+        "implementationRevision": "8e415214ccf11d6d62aa786c2eda21e30ea2e631",
+        "requirementVersion": 2,
+        "codeRevision": "fb0280ecab7c87e405a1b8061a2bee461e47d3b8"
+      },
+      {
+        "number": 7,
+        "outcome": "implementation-rejected-for-unresolved-work",
+        "implementationRevision": "6766799daf113e904593a2f9307b04bf756a1c10",
+        "requirementVersion": 2,
+        "codeRevision": "fb0280ecab7c87e405a1b8061a2bee461e47d3b8"
+      },
+      {
+        "number": 8,
+        "outcome": "pause-restart-resume-budget-verified",
+        "implementationRevision": "b5dedd0ae4b794aff63f82ced684136ac3302581",
+        "requirementVersion": 1,
+        "codeRevision": "396fecce71231ab69f25bb5001fe52a7c59e84a1"
+      },
+      {
+        "number": 9,
+        "outcome": "model-blocked-after-byte-inspection-error",
+        "implementationRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+        "requirementVersion": 2,
+        "codeRevision": "fb0280ecab7c87e405a1b8061a2bee461e47d3b8"
+      }
+    ],
+    "cancellation": {
+      "activityObserved": true,
+      "heartbeatStopped": true,
+      "toolExited": true,
+      "sourceUnchanged": true,
+      "allRunsStopped": true,
+      "occupancy": 0
+    },
+    "pause": {
+      "activityObserved": true,
+      "heartbeatStopped": true,
+      "toolExited": true,
+      "resumeBudgetBlocked": true,
+      "deadlinePreserved": true,
+      "occupancy": 0
+    },
+    "question": {
+      "waitingTicks": 5,
+      "additionalCalls": 0,
+      "requirementVersionAfterAnswer": 2,
+      "deadlinePreserved": true
+    },
+    "business": {
+      "accepted": false,
+      "status": "blocked",
+      "requirementVersion": 2,
+      "trustedValidationPassed": true,
+      "evidenceIssues": [],
+      "attempt9ImplementationAccepted": false,
+      "attempt9TrustedValidationRun": false,
+      "finalIndependentResolutionComplete": false,
+      "originalDeadlinePreserved": true,
+      "candidateRevision": "fb0280ecab7c87e405a1b8061a2bee461e47d3b8",
+      "rawBytesAndBlobMatch": true,
+      "candidateClean": true,
+      "sourceUnchanged": true,
+      "runsUsed": 6,
+      "iterationsUsed": 1,
+      "allRunsStopped": true,
+      "occupancy": 0,
+      "missingGates": [
+        "accepted implementation handoff after attempt 9",
+        "trusted verification for attempt 9",
+        "independent review resolving every pending claim"
+      ]
+    },
+    "actualCliModelInvocations": 8
+  },
+  "restrictions": [
+    "Native development runtime remains Windows-only.",
+    "Foreground tools only; unavailable guardian or legacy unproven execution retains ownership.",
+    "Unknown or partial side effects are not replayed.",
+    "Real business candidate remains unaccepted; attempt 10 was not launched because attempt 9 had no accepted implementation handoff."
+  ],
+  "automatedEvidence": [
+    {
+      "implementationRevision": "199650f10e28d64ea086999da24ed3e0dc9e2bd0",
+      "command": "npm run check",
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "implementationRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+      "command": "typecheck and codex-protocol focused checks",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "status": "passed",
+      "command": "npm run check",
+      "implementationRevision": "d6e43359c303c4eee17f73d13fe6d560aa31f345",
+      "typecheck": "passed",
+      "format": "passed",
+      "build": "passed",
+      "tests": 149,
+      "passed": 149,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 270444.0695
+    },
+    {
+      "implementationRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+      "command": "owned process, Codex and workspace focused checks",
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "ciRegression": {
+    "firstRevision": "bf665eb8dffea13c6b000c8984aff2b2a0eb0c59",
+    "linuxFailures": 2,
+    "diagnosticRevision": "77bcf8b2155cc062a188e0e8ebd314ef1ca46e7f",
+    "observed": "Git unlock exited 0 and was stopped; empty stdin closure was misclassified as input delivery failure.",
+    "fixRevision": "035381ba3da813d5644de1eace07d1c042426b19",
+    "linuxFixCheck": "success",
+    "linuxJobUrl": "https://github.com/MarsonShine/agent-relay/actions/runs/39537286405/job/119016750659"
+  }
+}

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { Intents } from '../storage/intents.ts';
 import {
   agentEventSchema,
   resultSchema,
@@ -87,7 +89,10 @@ export class Controller {
         if (state === 'stopped' && workflowState === 'stopped')
           this.runs.confirmStopped(run.id);
       }
-      const task = this.tasks.list('queued')[0];
+      await this.workflow?.workspaces.recover();
+      const task = this.tasks
+        .list('queued')
+        .find((t) => t.retryAt <= Date.now() || t.deadlineAt <= Date.now());
       if (!task) return;
       const role =
         task.kind === 'development' ? this.workflow?.role(task) : 'design';
@@ -220,6 +225,21 @@ export class Controller {
       };
       const [, result] = await Promise.all([consume(), handle.result]);
       const checked = resultSchema.parse(result);
+      if (!detached)
+        new Intents(this.tasks).prepare(
+          run,
+          'result',
+          'result',
+          checked.evidence,
+          JSON.stringify({
+            status: checked.status,
+            stopped: checked.stopped,
+            outputHash:
+              checked.output === null
+                ? null
+                : createHash('sha256').update(checked.output).digest('hex'),
+          }),
+        );
       if (
         !detached &&
         task.kind === 'development' &&
@@ -266,6 +286,11 @@ export class Controller {
         run,
         {
           ...outcome,
+          ...(winner.failureKind &&
+          run.profile.permission === 'read-only' &&
+          ['failed', 'blocked'].includes(outcome.status)
+            ? { retry: winner.failureKind }
+            : {}),
           ...(advance
             ? { status: advance.status, diagnostic: advance.diagnostic }
             : {}),

@@ -1,3 +1,4 @@
+import { Intents } from '../storage/intents.ts';
 import { createHash } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import { realpath } from 'node:fs/promises';
@@ -7,7 +8,8 @@ import { z } from 'zod';
 import type { Run, Task } from '../core/contracts.ts';
 import { evidenceSchema } from '../core/contracts.ts';
 import { RelayError } from '../core/errors.ts';
-import { BoundedProcess } from '../runtime/process.ts';
+import { mkdirSync, existsSync } from 'node:fs';
+import { OwnedProcess, stopOwned } from '../runtime/owned-process.ts';
 import { Runs } from '../storage/runs.ts';
 import { redact } from '../storage/redaction.ts';
 import { inside } from '../workspace/git.ts';
@@ -49,7 +51,7 @@ export const digest = (value: unknown) =>
 type Active = {
   owner: string;
   cancelled: boolean;
-  process: BoundedProcess | null;
+  process: OwnedProcess | null;
   stopped: boolean;
 };
 export class Verifier {
@@ -104,7 +106,7 @@ export class Verifier {
     };
     this.active.set(run.id, state);
     const checks: Validation['checks'] = [];
-    for (const command of policy.commands) {
+    for (const [index, command] of policy.commands.entries()) {
       this.owned(run);
       if (state.cancelled)
         throw new RelayError('conflict', 'verification cancelled');
@@ -128,7 +130,24 @@ export class Verifier {
         ),
       );
       state.stopped = false;
-      state.process = new BoundedProcess(
+      this.owned(run);
+      if (state.cancelled)
+        throw new RelayError('conflict', 'verification cancelled');
+      mkdirSync(this.processRoot(), { recursive: true, mode: 0o700 });
+      new Intents(this.workspaces.tasks).prepare(
+        run,
+        'verification',
+        `verification:${index}`,
+        { requirementVersion: task.requirementVersion, codeRevision: revision },
+        JSON.stringify({
+          policyHash: digest(policy),
+          definitionHash: digest(command),
+          id: command.id,
+        }),
+      );
+      state.process = new OwnedProcess(
+        this.processDirectory(run, index),
+        run.owner,
         { executable: command.executable },
         command.args,
         {
@@ -238,9 +257,31 @@ export class Verifier {
       )
     );
   }
-  reconcile(run: Run): 'active' | 'stopped' | 'unknown' {
+  private processRoot(): string {
+    return this.workspaces.tasks.db.path + '.processes';
+  }
+  private processDirectory(run: Run, index: number): string {
+    return join(this.processRoot(), `${run.id}-${run.owner}-${index}`);
+  }
+  private async recover(run: Run): Promise<'stopped' | 'unknown'> {
+    const commands =
+      this.workspaces.tasks.get(run.taskId).config.verification?.commands ?? [];
+    if (
+      !run.recoveryVersion &&
+      !commands.some((_, i) => existsSync(this.processDirectory(run, i)))
+    )
+      return 'unknown';
+    const states = await Promise.all(
+      commands.map((_, index) =>
+        stopOwned(this.processDirectory(run, index), run.owner),
+      ),
+    );
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
+  }
+  async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
     const state = this.active.get(run.id);
-    if (!state || state.owner !== run.owner) return 'unknown';
+    if (!state) return this.recover(run);
+    if (state.owner !== run.owner) return 'unknown';
     return state.process
       ? state.process.status()
       : state.stopped
@@ -257,7 +298,7 @@ export class Verifier {
         process: null,
         stopped: true,
       });
-      return 'stopped';
+      return this.recover(run);
     }
     if (state.owner !== run.owner) return 'unknown';
     state.cancelled = true;

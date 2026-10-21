@@ -440,3 +440,37 @@ test('registered implementation worktree reaches Codex adapter through a fake CL
   new Runs(f.tasks).finish(run, completed);
   assert.equal(occupied(f), 0);
 });
+
+test('slow workspace preparation hands the backend the renewed lease, not the expired claim snapshot', async (t) => {
+  const f = workspaceFixture(t),
+    task = f.tasks.get(f.task.id);
+  f.db.transaction(() =>
+    f.tasks.save(task, { ...task, config: { ...task.config, leaseMs: 1000 } }),
+  );
+  const run = claim(f),
+    runs = new Runs(f.tasks),
+    backend = new ProbeExecutor();
+  const timer = setInterval(() => runs.renew(run), 200);
+  try {
+    backend.effect = (r) => {
+      assert.ok(
+        Date.now() > run.leaseUntil,
+        'fixture preparation must cross initial expiry',
+      );
+      assert.ok(r.run.leaseUntil > Date.now());
+      assert.equal(r.run.owner, run.owner);
+      assert.deepEqual(r.run.evidence, run.evidence);
+    };
+    const executor = new WorkspaceExecutor(backend, f.manager);
+    const prepare = f.manager.prepare.bind(f.manager);
+    f.manager.prepare = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      return prepare(...args);
+    };
+    const result = await consume(await executor.start(request(f, run)));
+    assert.equal(result.result.status, 'completed');
+    runs.finish(run, completed);
+  } finally {
+    clearInterval(timer);
+  }
+});

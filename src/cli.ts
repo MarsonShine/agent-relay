@@ -18,6 +18,7 @@ node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
 node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
 node dist/cli.js task answer ID --version N --question ID --question-version N --input FILE [--data-dir DIR]
+node dist/cli.js task revise ID --version N --requirement-version N --input FILE [--data-dir DIR]
 node dist/cli.js task pause|resume|cancel ID --version N [--data-dir DIR]
 All output is JSON. Mutations require the task version returned by status.
 Development runtime permits bounded Codex calls in managed worktrees. No PR publication or automatic merge.`;
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
       version: { type: 'string' },
       question: { type: 'string' },
       'question-version': { type: 'string' },
+      'requirement-version': { type: 'string' },
       after: { type: 'string' },
       limit: { type: 'string' },
     },
@@ -144,17 +146,29 @@ async function main(): Promise<void> {
         `/v1/tasks/${taskId}/events?${query}`,
       );
     } else {
-      if (!['answer', 'pause', 'resume', 'cancel'].includes(action ?? ''))
+      if (
+        !['answer', 'revise', 'pause', 'resume', 'cancel'].includes(
+          action ?? '',
+        )
+      )
         throw new RelayError('invalid', 'unknown task action');
       validateOptions(
         action === 'answer'
           ? ['version', 'question', 'question-version', 'input']
-          : ['version'],
+          : action === 'revise'
+            ? ['version', 'requirement-version', 'input']
+            : ['version'],
         3,
       );
       const command = commandSchema.parse({
         action,
         expectedVersion: Number(requireOption('version')),
+        ...(action === 'revise'
+          ? {
+              requirementVersion: Number(requireOption('requirement-version')),
+              input: readInput(requireOption('input')),
+            }
+          : {}),
         ...(action === 'answer'
           ? {
               questionId: requireOption('question'),

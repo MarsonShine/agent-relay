@@ -53,6 +53,8 @@ export const taskSchema = z.strictObject({
   config: configSchema,
   runsUsed: z.number().int().nonnegative(),
   iterationsUsed: z.number().int().nonnegative(),
+  infrastructureRetriesUsed: z.number().int().nonnegative().default(0),
+  retryAt: z.number().int().nonnegative().default(0),
   createdAt: z.number().int().nonnegative(),
   deadlineAt: z.number().int().positive(),
   control: z.enum(['pause', 'cancel']).nullable(),
@@ -67,6 +69,7 @@ export const runSchema = z.strictObject({
   attempt: versionSchema,
   profile: profileSchema,
   executorVersion: z.string().min(1),
+  recoveryVersion: z.literal(1).optional(),
   evidence: evidenceSchema,
   status: z.enum(['active', 'unknown', 'stopped']),
   owner: idSchema,
@@ -127,6 +130,18 @@ export const decisionSchema = z.strictObject({
   requirementVersion: versionSchema,
 });
 export type Decision = z.infer<typeof decisionSchema>;
+export const requirementRecordSchema = z.strictObject({
+  taskId: idSchema,
+  requirementVersion: versionSchema,
+  input: z.string().min(1).max(32768),
+  source: z.enum(['created', 'answer', 'revise', 'imported']),
+});
+export const questionRecordSchema = z.strictObject({
+  taskId: idSchema,
+  runId: idSchema.nullable(),
+  question: questionSchema,
+  evidence: evidenceSchema,
+});
 export const createTaskSchema = z.strictObject({
   kind: z.enum(['simulation', 'development']).optional(),
   schemaVersion: z.literal(1),
@@ -138,6 +153,12 @@ export const createTaskSchema = z.strictObject({
 });
 export type CreateTask = z.infer<typeof createTaskSchema>;
 export const commandSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('revise'),
+    expectedVersion: versionSchema,
+    requirementVersion: versionSchema,
+    input: z.string().min(1).max(32_768),
+  }),
   z.strictObject({
     action: z.enum(['pause', 'resume', 'cancel']),
     expectedVersion: versionSchema,

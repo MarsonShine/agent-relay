@@ -1,3 +1,4 @@
+import { Intents } from './intents.ts';
 import { roleSchema } from '../core/config.ts';
 import type { Profile } from '../core/config.ts';
 import type { Advance } from '../core/handoff.ts';
@@ -62,6 +63,7 @@ export class Runs {
         );
         return null;
       }
+      if (now < task.retryAt) return null;
       const run = runSchema.parse({
         schemaVersion: 1,
         id: randomUUID(),
@@ -69,6 +71,7 @@ export class Runs {
         attempt: task.runsUsed + 1,
         profile: task.config.profiles[role],
         executorVersion,
+        recoveryVersion: 1,
         evidence: {
           requirementVersion: task.requirementVersion,
           codeRevision: task.codeRevision,
@@ -89,6 +92,7 @@ export class Runs {
         runsUsed: task.runsUsed + 1,
         diagnostic: null,
       });
+      new Intents(this.tasks).putInside(run, 'launch', 'launch');
       this.tasks.append(
         taskId,
         run.id,
@@ -150,6 +154,7 @@ export class Runs {
       diagnostic: string | null;
       question: Task['question'];
       continuation: string | null;
+      retry?: 'infrastructure' | 'semantic';
     },
     now = Date.now(),
     advance?: Advance,
@@ -157,12 +162,42 @@ export class Runs {
     return this.tasks.db.transaction(() => {
       const current = this.owned(run, now);
       const task = this.tasks.get(run.taskId);
-      const status =
+      let status: Task['status'] =
         task.control === 'cancel'
           ? 'cancelled'
           : task.control === 'pause'
             ? 'paused'
             : outcome.status;
+      let infrastructureRetriesUsed = task.infrastructureRetriesUsed,
+        iterationsUsed = task.iterationsUsed,
+        retryAt = task.retryAt;
+      let diagnostic = outcome.diagnostic;
+      if (!task.control && outcome.retry) {
+        const infrastructure = outcome.retry === 'infrastructure';
+        const used = infrastructure
+          ? infrastructureRetriesUsed
+          : iterationsUsed;
+        const limit = infrastructure
+          ? (task.config.budget.maxInfrastructureRetries ?? 2)
+          : task.config.budget.maxIterations;
+        const backoff = Math.min(
+          10000,
+          (task.config.budget.retryBaseMs ?? 1000) * 2 ** used,
+        );
+        if (
+          used >= limit ||
+          task.runsUsed >= task.config.budget.maxRuns ||
+          now + backoff >= task.deadlineAt
+        ) {
+          status = 'blocked';
+          diagnostic = `${outcome.retry} retry budget exhausted`;
+        } else {
+          if (infrastructure) infrastructureRetriesUsed++;
+          else iterationsUsed++;
+          retryAt = now + backoff;
+          status = 'queued';
+        }
+      }
       this.update({
         ...current,
         status: 'stopped',
@@ -170,10 +205,14 @@ export class Runs {
         outcome: status,
       });
       if (!task.control) advance?.persist();
+      new Intents(this.tasks).settleInside(current, 'settled');
       this.releaseWorkspace(current);
       const saved = this.tasks.save(task, {
         ...task,
         status,
+        infrastructureRetriesUsed,
+        iterationsUsed,
+        retryAt,
         ...(!task.control && advance
           ? {
               stage: advance.stage,
@@ -182,9 +221,10 @@ export class Runs {
             }
           : {}),
         control: null,
-        diagnostic: outcome.diagnostic,
+        diagnostic,
         question: status === 'waiting_user' ? outcome.question : null,
       });
+      this.tasks.recordQuestion(saved, run.id);
       this.tasks.append(
         task.id,
         run.id,
@@ -248,6 +288,7 @@ export class Runs {
             ? 'paused'
             : 'blocked';
       this.update({ ...run, status: 'stopped', outcome: 'reconciled_stop' });
+      new Intents(this.tasks).settleInside(run, 'abandoned');
       this.releaseWorkspace(run);
       const saved = this.tasks.save(task, {
         ...task,

@@ -291,3 +291,68 @@ test('exhausted repair budget preserves feedback but does not schedule another m
   assert.equal(f.backend.calls.length, 3);
   assert.equal(f.workflow.history(blocked).length, 3);
 });
+
+test('design summaries and response claims do not manufacture progress after reopening', async (t) => {
+  const f = setup(t);
+  let designs = 0;
+  f.backend.output = (r) => {
+    if (r.task.stage === 'triage')
+      return { ...triage, kind: 'change', scope: ['value.txt'] };
+    if (r.task.stage === 'design')
+      return {
+        stage: 'design',
+        summary: `new wording ${++designs}`,
+        evidence: [{ path: 'value.txt', line: 1, excerpt: 'baseline' }],
+        rootCause: 'missing validation',
+        invariant: 'reject empty',
+        fixLayer: 'parser',
+        steps: ['store value'],
+        validationPlan: ['check nonempty'],
+        responses:
+          designs === 1
+            ? []
+            : [
+                {
+                  findingId: 'F1',
+                  disposition: 'addressed',
+                  proof: 'claimed fixed',
+                },
+              ],
+      };
+    return {
+      stage: 'design_review',
+      subjectRunId: r.handoff!.history.at(-1)!.runId,
+      verdict: 'revise',
+      coverage: [],
+      resolutions: [],
+      findings: [
+        {
+          id: 'F1',
+          severity: 'blocking',
+          origin: 'design',
+          location: 'parser',
+          trigger: 'empty input',
+          proof: 'no reject step',
+          impact: 'invalid value stored',
+        },
+      ],
+    };
+  };
+  await f.step();
+  await f.step();
+  await f.step();
+  const restarted = new Controller(
+    f.tasks,
+    f.evidence,
+    f.backend,
+    new LocalWorkflow(f.manager, f.evidence),
+  );
+  await restarted.tick();
+  await restarted.wait();
+  const blocked = f.tasks.get(f.task.id);
+  assert.equal(blocked.status, 'blocked');
+  assert.match(blocked.diagnostic!, /no progress/);
+  assert.equal(blocked.iterationsUsed, 1);
+  await restarted.tick();
+  assert.equal(f.backend.calls.length, 4);
+});

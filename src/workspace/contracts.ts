@@ -4,6 +4,7 @@ import { idSchema, versionSchema } from '../core/contracts.ts';
 export const commitSchema = z.string().regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/);
 export const workspaceSchema = z.strictObject({
   schemaVersion: z.literal(1),
+  recoveryVersion: z.literal(1).optional(),
   id: idSchema,
   taskId: idSchema,
   kind: z.enum(['implementation', 'review', 'repository']),

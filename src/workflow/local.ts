@@ -16,6 +16,20 @@ import type { Workspaces } from '../workspace/manager.ts';
 
 import type { Advance } from '../core/handoff.ts';
 
+// Summaries and repair claims cannot establish changed design content.
+export function designProgress(
+  result: Extract<Handoff, { stage: 'design' }>,
+): string {
+  return digest({
+    evidence: result.evidence,
+    rootCause: result.rootCause,
+    invariant: result.invariant,
+    fixLayer: result.fixLayer,
+    steps: result.steps,
+    validationPlan: result.validationPlan,
+  });
+}
+
 export class LocalWorkflow {
   readonly workspaces: Workspaces;
   readonly evidence: Evidence;
@@ -185,6 +199,7 @@ export class LocalWorkflow {
     const unresolved = new Map(
       this.pending(task, history, run.id).map((f) => [f.id, f.origin]),
     );
+    let newDispute = false;
     if (result.stage === 'implement' || result.stage === 'design') {
       const relevant = [...unresolved]
         .filter(
@@ -198,10 +213,34 @@ export class LocalWorkflow {
           'conflict',
           'repair must address or dispute every outstanding finding with evidence',
         );
+      const previous = latest(result.stage)?.result;
+      const previousResponses =
+        previous &&
+        (previous.stage === 'implement' || previous.stage === 'design')
+          ? previous.responses
+          : [];
+      newDispute =
+        relevant.length > 0 &&
+        result.responses.length === relevant.length &&
+        relevant.every((id) =>
+          result.responses.some(
+            (r) => r.findingId === id && r.disposition === 'disputed',
+          ),
+        ) &&
+        relevant.some(
+          (id) =>
+            !previousResponses.some(
+              (r) => r.findingId === id && r.disposition === 'disputed',
+            ),
+        );
       if (
+        !newDispute &&
         result.stage === 'design' &&
-        latest('design') !== undefined &&
-        digest(result) === digest(latest('design')?.result)
+        history.some(
+          (h) =>
+            h.result.stage === 'design' &&
+            designProgress(h.result) === designProgress(result),
+        )
       )
         throw new RelayError('conflict', 'design feedback made no progress');
     }
@@ -253,17 +292,23 @@ export class LocalWorkflow {
       const workspace = this.workspaces
         .list(task.id)
         .find((w) => w.kind === 'implementation');
+      const previousImplementation = latest('implement')?.result;
+      const unchangedCandidate =
+        result.resultRevision === this.implementationBase(task);
       if (
         !workspace ||
         result.baseRevision !== this.implementationBase(task) ||
         result.unresolved.length ||
         (await this.workspaces.git.verify(workspace, true)) !==
           result.resultRevision ||
-        result.resultRevision === this.implementationBase(task)
+        (unchangedCandidate &&
+          (!newDispute ||
+            previousImplementation?.stage !== 'implement' ||
+            previousImplementation.resultRevision !== result.resultRevision))
       )
         throw new RelayError(
           'conflict',
-          'implementation requires a new clean committed result with no unresolved work',
+          'implementation requires a new clean committed result or a new evidence-backed dispute of the current candidate',
         );
       const files = (
         await this.workspaces.git.command(workspace.path, [
@@ -289,6 +334,31 @@ export class LocalWorkflow {
           'conflict',
           'implementation changed files outside the approved triage scope or omitted changes',
         );
+      const tree = async (revision: string) =>
+        (
+          await this.workspaces.git.command(workspace.path, [
+            'rev-parse',
+            `${revision}^{tree}`,
+          ])
+        ).trim();
+      const candidateTree = await tree(result.resultRevision);
+      const priorRevisions = [
+        this.implementationBase(task)!,
+        ...history.flatMap((h) =>
+          h.result.stage === 'implement'
+            ? [h.result.baseRevision, h.result.resultRevision]
+            : [],
+        ),
+      ];
+      for (const revision of unchangedCandidate && newDispute
+        ? []
+        : new Set(priorRevisions)) {
+        if (candidateTree === (await tree(revision)))
+          throw new RelayError(
+            'conflict',
+            'implementation repeats an earlier code tree; no progress',
+          );
+      }
       const validation = await this.verifier.run(
         task,
         run,
@@ -432,9 +502,17 @@ export class LocalWorkflow {
     };
   }
   async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
-    return this.verifier.reconcile(run);
+    const states = await Promise.all([
+      this.verifier.reconcile(run),
+      this.workspaces.stopPending(run.taskId),
+    ]);
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
   }
   async cancel(run: Run): Promise<'stopped' | 'unknown'> {
-    return this.verifier.cancel(run);
+    const states = await Promise.all([
+      this.verifier.cancel(run),
+      this.workspaces.stopPending(run.taskId),
+    ]);
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
   }
 }

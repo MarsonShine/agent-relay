@@ -7,12 +7,14 @@ export type ProcessExit = {
   code: number | null;
   stopped: boolean;
   reason: string | null;
+  transientFailure?: boolean | undefined;
 };
 export class BoundedProcess {
   readonly child: ChildProcessWithoutNullStreams;
   readonly done: Promise<ProcessExit>;
   private closeSeen = false;
   private spawnFailed = false;
+  private transientFailure = false;
   private result: ProcessExit | null = null;
   private resolveDone!: (exit: ProcessExit) => void;
   private resolveClosed!: () => void;
@@ -71,23 +73,32 @@ export class BoundedProcess {
     this.child.stderr.on('data', (chunk: Buffer) =>
       receive(chunk, options.stderr),
     );
-    this.child.on('error', () => {
+    this.child.on('error', (error: NodeJS.ErrnoException) => {
+      this.transientFailure = ['EAGAIN', 'EMFILE', 'ENFILE'].includes(
+        error.code ?? '',
+      );
       this.spawnFailed = true;
       this.reason ??= 'process could not start';
     });
     this.child.stdin.on('error', () => {
-      this.reason ??= 'process input failed';
+      if (options.input.length > 0) this.reason ??= 'process input failed';
     });
     this.child.on('close', (code) => {
       this.closeSeen = true;
       this.resolveClosed();
       if (!this.stopping)
-        this.complete({ code, stopped: true, reason: this.reason });
+        this.complete({
+          code,
+          stopped: true,
+          reason: this.reason,
+          ...(this.transientFailure ? { transientFailure: true } : {}),
+        });
     });
     this.timer = setTimeout(() => {
       void this.stop('execution timeout');
     }, options.timeoutMs);
-    this.child.stdin.end(options.input);
+    if (options.input.length > 0) this.child.stdin.end(options.input);
+    else this.child.stdin.end();
   }
   private complete(exit: ProcessExit): void {
     if (this.result) return;

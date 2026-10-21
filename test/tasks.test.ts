@@ -126,7 +126,7 @@ test('older task database migrates without losing task and event history', (t) =
   const { tasks, db, path } = fixture(t);
   const task = tasks.create(request());
   db.sql.exec(
-    'DROP TABLE validations; DROP TABLE handoffs; DROP TABLE workspace_access; DROP TABLE workspaces; DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1',
+    'DROP TABLE requirement_history; DROP TABLE question_history; DROP TABLE execution_intents; DROP TABLE validations; DROP TABLE handoffs; DROP TABLE workspace_access; DROP TABLE workspaces; DROP TABLE artifacts; DROP TABLE runs; PRAGMA user_version=1',
   );
   const migrated = new Database(path);
   try {
@@ -134,7 +134,7 @@ test('older task database migrates without losing task and event history', (t) =
     assert.equal(new Tasks(migrated).events(task.id).length, 1);
     assert.equal(
       migrated.sql.prepare('PRAGMA user_version').get()?.user_version,
-      6,
+      8,
     );
     assert.ok(
       migrated.sql
@@ -145,5 +145,99 @@ test('older task database migrates without losing task and event history', (t) =
     );
   } finally {
     migrated.close();
+  }
+});
+
+test('requirement replacement is idle-only, versioned and preserves consumed budget on reopen', (t) => {
+  const { tasks, db, path } = fixture(t);
+  const original = tasks.create({ ...request(), kind: 'development' });
+  const paused = db.transaction(() =>
+    tasks.save(original, {
+      ...original,
+      status: 'paused',
+      stage: 'implement',
+      runsUsed: 3,
+      iterationsUsed: 2,
+    }),
+  );
+  const command = {
+    action: 'revise' as const,
+    expectedVersion: paused.version,
+    requirementVersion: 1,
+    input: 'Replacement requirements',
+  };
+  assert.throws(
+    () => tasks.command(original.id, { ...command, requirementVersion: 2 }),
+    /current version/,
+  );
+  const revised = tasks.command(original.id, command);
+  assert.equal(revised.status, 'paused');
+  assert.equal(revised.stage, 'triage');
+  assert.equal(revised.requirementVersion, 2);
+  assert.equal(revised.deadlineAt, original.deadlineAt);
+  assert.equal(revised.runsUsed, 3);
+  assert.equal(revised.iterationsUsed, 2);
+  const reopened = new Database(path);
+  try {
+    const other = new Tasks(reopened);
+    assert.deepEqual(other.get(original.id), revised);
+    assert.equal(other.decisions(original.id)[0]?.answer, command.input);
+    assert.throws(() => other.command(original.id, command), /version changed/);
+    const running = db.transaction(() => {
+      const queued = tasks.save(revised, { ...revised, status: 'queued' });
+      return tasks.save(queued, { ...queued, status: 'running' });
+    });
+    assert.throws(
+      () =>
+        other.command(original.id, {
+          ...command,
+          expectedVersion: running.version,
+          requirementVersion: 2,
+        }),
+      /confirmed idle/,
+    );
+  } finally {
+    reopened.close();
+  }
+});
+
+test('replacement retains the original requirement and superseded unanswered question after reopen', (t) => {
+  const { tasks, db, path } = fixture(t),
+    task = tasks.create({ ...request(), input: 'Original requirement' });
+  const question = {
+    id: randomUUID(),
+    version: 1,
+    text: 'Original pending question',
+  };
+  const waiting = db.transaction(() => {
+    const running = tasks.save(task, { ...task, status: 'running' });
+    return tasks.save(running, {
+      ...running,
+      status: 'waiting_user',
+      question,
+    });
+  });
+  tasks.command(task.id, {
+    action: 'revise',
+    expectedVersion: waiting.version,
+    requirementVersion: 1,
+    input: 'Replacement requirement',
+  });
+  const reopened = new Database(path);
+  try {
+    const other = new Tasks(reopened);
+    assert.deepEqual(
+      other.requirements(task.id).map((r) => [r.requirementVersion, r.input]),
+      [
+        [1, 'Original requirement'],
+        [2, 'Replacement requirement'],
+      ],
+    );
+    assert.deepEqual(other.questions(task.id)[0]?.question, question);
+    assert.equal(other.questions(task.id)[0]?.evidence.requirementVersion, 1);
+    assert.equal(other.get(task.id).question, null);
+    assert.equal(other.get(task.id).deadlineAt, task.deadlineAt);
+  } finally {
+    reopened.close();
   }
 });

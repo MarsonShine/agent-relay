@@ -1,3 +1,4 @@
+import { Intents } from '../storage/intents.ts';
 import { runtimeSchema } from './development.ts';
 import type { DevelopmentRuntime } from './development.ts';
 import { CodexExecutor } from '../adapters/codex/executor.ts';
@@ -258,6 +259,8 @@ export async function startService(options: {
           }
           send(response, 200, {
             task,
+            requirements: tasks.requirements(id),
+            questions: tasks.questions(id),
             ...(workflow
               ? {
                   handoffs: workflow.history(task),
@@ -266,6 +269,9 @@ export async function startService(options: {
                 }
               : {}),
             artifacts,
+            intents: new Intents(tasks)
+              .list(id)
+              .map(({ owner: _owner, ...intent }) => intent),
             evidenceIssues: issues,
             accepted: task.status === 'succeeded' && issues.length === 0,
             runs: controller.runs.forTask(id).map((run) => ({

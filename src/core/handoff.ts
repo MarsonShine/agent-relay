@@ -68,8 +68,18 @@ export const handoffSchema = z.discriminatedUnion('stage', [
     summary: text,
     baseRevision: sha,
     resultRevision: sha,
-    changedFiles: z.array(relativeFile).min(1).max(100),
-    unresolved: z.array(text).max(30),
+    changedFiles: z
+      .array(relativeFile)
+      .max(100)
+      .describe(
+        'Actual changed files relative to baseRevision. Empty only for a permitted unchanged-candidate dispute; never manufacture a commit.',
+      ),
+    unresolved: z
+      .array(text)
+      .max(30)
+      .describe(
+        'Unfinished implementation work only. Findings awaiting independent resolution belong in pendingFindings and responses, not here when implementation work is complete. Return [] only after verifying no unfinished implementation work remains.',
+      ),
   }),
   z.strictObject({
     stage: z.enum(['design_review', 'code_review']),

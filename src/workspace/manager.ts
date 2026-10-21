@@ -13,6 +13,7 @@ export class Workspaces {
   readonly tasks: Tasks;
   readonly root: string;
   readonly git: GitWorktrees;
+  private scanned = new Set<string>();
   constructor(tasks: Tasks, root: string, git = new GitWorktrees()) {
     if (!isAbsolute(root))
       throw new RelayError(
@@ -22,6 +23,13 @@ export class Workspaces {
     this.tasks = tasks;
     this.root = root;
     this.git = git;
+    const recoveryRoot = tasks.db.path + '.git-processes';
+    if (git.recoveryRoot && git.recoveryRoot !== recoveryRoot)
+      throw new RelayError(
+        'conflict',
+        'Git ownership root differs from storage',
+      );
+    git.recoveryRoot = recoveryRoot;
   }
   get(id: string): Workspace {
     const row = this.tasks.db.sql
@@ -134,6 +142,7 @@ export class Workspaces {
     const id = randomUUID();
     const workspace = workspaceSchema.parse({
       schemaVersion: 1,
+      recoveryVersion: 1,
       id,
       taskId,
       kind,
@@ -327,6 +336,61 @@ export class Workspaces {
       return updated;
     });
   }
+  async stopPending(taskId: string): Promise<'stopped' | 'unknown'> {
+    const states = await Promise.all(
+      this.list(taskId)
+        .filter((w) => w.state === 'creating' || w.state === 'removing')
+        .map((w) => this.git.reconcile(w)),
+    );
+    return states.every((s) => s === 'stopped') ? 'stopped' : 'unknown';
+  }
+  /** Scan known facts only; never rerun worktree creation or removal. */
+  async recover(): Promise<void> {
+    for (const task of this.tasks.list()) {
+      if (
+        this.tasks.db.sql
+          .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+          .get(task.id)
+      )
+        continue;
+      for (const workspace of this.list(task.id)) {
+        if (
+          !['creating', 'removing'].includes(workspace.state) ||
+          this.scanned.has(workspace.id)
+        )
+          continue;
+        if ((await this.git.reconcile(workspace)) !== 'stopped') continue;
+        try {
+          if (workspace.state === 'creating')
+            await this.confirmCreated(workspace.id);
+          else {
+            const registered = (await this.git.listed(workspace.repo)).some(
+              (w) =>
+                w.worktree && pathKey(w.worktree) === pathKey(workspace.path),
+            );
+            if ((await exists(workspace.path)) || registered)
+              throw new RelayError('conflict', 'removal remains incomplete');
+            this.tasks.db.transaction(() => {
+              if (this.get(workspace.id).state !== 'removing')
+                throw new RelayError('conflict', 'workspace changed');
+              this.save({ ...workspace, state: 'removed' });
+            });
+          }
+        } catch {
+          this.tasks.db.transaction(() =>
+            this.tasks.append(
+              task.id,
+              null,
+              `workspace-recovery:${workspace.id}`,
+              'workspace.recovery_pending',
+              'Stopped worktree operation is incomplete or changed; no side effect replayed',
+            ),
+          );
+        }
+        this.scanned.add(workspace.id);
+      }
+    }
+  }
   async inspect(
     id: string,
   ): Promise<{ workspace: Workspace; consistent: boolean }> {
@@ -362,7 +426,7 @@ export class Workspaces {
           .get(workspace.taskId)
       )
         throw new RelayError('conflict', 'workspace is occupied or changed');
-      this.save({ ...workspace, state: 'removing' });
+      this.save({ ...workspace, recoveryVersion: 1, state: 'removing' });
     });
     await this.git.remove(workspace);
     return this.tasks.db.transaction(() =>

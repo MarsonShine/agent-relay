@@ -91,6 +91,7 @@ export class WorkspaceExecutor implements Executor {
       throw new RelayError('conflict', 'workspace preparation was cancelled');
     const handoff = executionRequestSchema.parse({
       ...request,
+      run: this.access.runs.get(run.id),
       workspace: this.access.declaration(lease),
     });
     state.invoked = true;
@@ -158,13 +159,15 @@ export class WorkspaceExecutor implements Executor {
   }
   async cancel(run: Run): Promise<'stopped' | 'unknown'> {
     const state = this.launches.get(run.id);
-    if (!state || state.owner !== run.owner) return 'unknown';
+    if (!state) return this.backend.cancel(run);
+    if (state.owner !== run.owner) return 'unknown';
     state.cancelled = true;
     return state.invoked ? this.backend.cancel(run) : 'stopped';
   }
   async reconcile(run: Run): Promise<'active' | 'stopped' | 'unknown'> {
     const state = this.launches.get(run.id);
-    if (!state || state.owner !== run.owner) return 'unknown';
+    if (!state) return this.backend.reconcile(run);
+    if (state.owner !== run.owner) return 'unknown';
     return state.invoked
       ? this.backend.reconcile(run)
       : state.cancelled
