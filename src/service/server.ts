@@ -1,4 +1,5 @@
 import { Intents } from '../storage/intents.ts';
+import { controllerTool } from '../runtime/controller-tools.ts';
 import { Sources } from '../github/source.ts';
 import { GitHubTransport } from '../github/transport.ts';
 import type { Transport } from '../github/transport.ts';
@@ -57,7 +58,7 @@ const executeFile = promisify(execFile);
 async function revision(repo: string): Promise<string | null> {
   try {
     const { stdout } = await executeFile(
-      'git',
+      controllerTool('git', [repo]),
       ['rev-parse', '--verify', 'HEAD'],
       { cwd: repo, windowsHide: true, timeout: 5_000, maxBuffer: 4096 },
     );
@@ -146,7 +147,9 @@ export async function startService(options: {
     throw new RelayError('invalid', 'invalid port');
   const db = new Database(join(directory, 'state.db'));
   const tasks = new Tasks(db, [token]);
-  const transport = options.githubTransport ?? new GitHubTransport();
+  const transport =
+    options.githubTransport ??
+    new GitHubTransport(runtime ? [runtime.repo, runtime.workspaces] : []);
   const sources = new Sources(tasks, transport);
   const deliveries = new Deliveries(tasks, transport);
   const evidence = new Evidence(tasks, join(directory, 'evidence'), [token]);

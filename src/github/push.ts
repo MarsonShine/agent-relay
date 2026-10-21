@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { controllerTool } from '../runtime/controller-tools.ts';
 import { mkdirSync } from 'node:fs';
 import { OwnedProcess, stopOwned } from '../runtime/owned-process.ts';
 import type { DeliveryIntent } from './delivery-store.ts';
@@ -27,7 +28,7 @@ export class GitPush implements Push {
     const child = new OwnedProcess(
       join(this.directory, intent.key),
       intent.key,
-      { executable: 'git' },
+      { executable: controllerTool('git', [workspace]) },
       [
         '-c',
         'credential.interactive=never',

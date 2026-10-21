@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { controllerTool } from '../runtime/controller-tools.ts';
 import { promisify } from 'node:util';
 import { RelayError } from '../core/errors.ts';
 
@@ -47,6 +48,10 @@ export function successful(reply: Reply): unknown {
 }
 /** Credentials stay in the controller; destinations never come from issue text. */
 export class GitHubTransport implements Transport {
+  readonly excludedPaths: readonly string[];
+  constructor(excludedPaths: readonly string[] = []) {
+    this.excludedPaths = [...excludedPaths];
+  }
   async request(
     path: string,
     method: 'GET' | 'POST' | 'PATCH' = 'GET',
@@ -60,7 +65,7 @@ export class GitHubTransport implements Transport {
     )
       throw new RelayError('invalid', 'untrusted GitHub endpoint');
     const { stdout } = await promisify(execFile)(
-      'gh',
+      controllerTool('gh', [process.cwd(), ...this.excludedPaths]),
       ['auth', 'token', '--hostname', 'github.com'],
       {
         timeout: 5000,
