@@ -126,7 +126,7 @@ export const decisionSchema = z.strictObject({
   taskId: idSchema,
   question: questionSchema,
   answer: z.string().min(1).max(32_768),
-  source: z.literal('local-user'),
+  source: z.enum(['local-user', 'github-feedback', 'github-ci']),
   requirementVersion: versionSchema,
 });
 export type Decision = z.infer<typeof decisionSchema>;
@@ -134,7 +134,13 @@ export const requirementRecordSchema = z.strictObject({
   taskId: idSchema,
   requirementVersion: versionSchema,
   input: z.string().min(1).max(32768),
-  source: z.enum(['created', 'answer', 'revise', 'imported']),
+  source: z.enum([
+    'created',
+    'answer',
+    'revise',
+    'imported',
+    'github-feedback',
+  ]),
 });
 export const questionRecordSchema = z.strictObject({
   taskId: idSchema,

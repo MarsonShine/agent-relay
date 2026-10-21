@@ -248,9 +248,83 @@ export class Tasks {
     });
   }
   // History writes share the task/Run transition transaction.
+  feedbackInside(
+    task: Task,
+    kind: 'requirement' | 'implementation' | 'design',
+    text: string,
+    source: 'github-feedback' | 'github-ci',
+  ): Task {
+    const delivery = this.db.sql
+      .prepare('SELECT document FROM deliveries WHERE task_id=?')
+      .get(task.id);
+    if (
+      task.status !== 'succeeded' ||
+      task.stage !== 'deliver' ||
+      !delivery ||
+      JSON.parse(String(delivery.document)).status !== 'watching' ||
+      this.db.sql
+        .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+        .get(task.id) ||
+      this.db.sql
+        .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+        .get(task.id) ||
+      task.iterationsUsed >= task.config.budget.maxIterations ||
+      task.runsUsed >= task.config.budget.maxRuns ||
+      Date.now() >= task.deadlineAt
+    )
+      throw new RelayError(
+        'conflict',
+        'feedback requires idle accepted delivery within original budgets',
+      );
+    const decision = decisionSchema.parse({
+      schemaVersion: 1,
+      id: randomUUID(),
+      taskId: task.id,
+      question: {
+        id: randomUUID(),
+        version: task.requirementVersion,
+        text: `Authorized ${source}: ${kind}`,
+      },
+      answer: text,
+      source,
+      requirementVersion:
+        task.requirementVersion + (kind === 'requirement' ? 1 : 0),
+    });
+    if (this.decisions(task.id).length >= 100)
+      throw new RelayError('conflict', 'decision history limit reached');
+    this.db.sql
+      .prepare('INSERT INTO decisions VALUES(?,?,?)')
+      .run(decision.id, task.id, JSON.stringify(decision));
+    const next = this.save(task, {
+      ...task,
+      requirementVersion: decision.requirementVersion,
+      input:
+        kind === 'requirement'
+          ? `${task.input}\n\nAuthorized requirement update:\n${text}`
+          : task.input,
+      status: 'queued',
+      stage:
+        kind === 'requirement'
+          ? 'triage'
+          : kind === 'design'
+            ? 'design'
+            : 'implement',
+      iterationsUsed: task.iterationsUsed + 1,
+      diagnostic: null,
+    });
+    if (kind === 'requirement') this.recordRequirement(next, 'github-feedback');
+    this.append(
+      task.id,
+      null,
+      `feedback:${decision.id}`,
+      'task.feedback',
+      `${kind}:${next.requirementVersion}`,
+    );
+    return next;
+  }
   private recordRequirement(
     task: Task,
-    source: 'created' | 'answer' | 'revise',
+    source: 'created' | 'answer' | 'revise' | 'github-feedback',
   ): void {
     const record = requirementRecordSchema.parse({
       taskId: task.id,

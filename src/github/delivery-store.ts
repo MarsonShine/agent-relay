@@ -27,7 +27,14 @@ export type DeliveryIntent = z.infer<typeof intentSchema>;
 export const deliverySchema = z.strictObject({
   taskId: z.uuid(),
   current: z.uuid(),
-  status: z.enum(['pending', 'watching', 'complete', 'blocked', 'cancelled']),
+  status: z.enum([
+    'pending',
+    'waiting_local',
+    'watching',
+    'complete',
+    'blocked',
+    'cancelled',
+  ]),
   diagnostic: z.string().nullable(),
   polls: z.number().int().nonnegative(),
   nextPollAt: z.number().nonnegative(),
