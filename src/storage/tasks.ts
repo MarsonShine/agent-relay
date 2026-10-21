@@ -7,6 +7,7 @@ import {
   decisionSchema,
   eventSchema,
   taskSchema,
+  budgetAmendmentSchema,
 } from '../core/contracts.ts';
 import type {
   Command,
@@ -136,6 +137,64 @@ export class Tasks {
           'conflict',
           'task version changed; read status before retrying',
         );
+      if (command.action === 'budget') {
+        if (
+          ![
+            'queued',
+            'waiting_user',
+            'paused',
+            'blocked',
+            'succeeded',
+          ].includes(task.status) ||
+          task.control ||
+          Date.now() >= task.deadlineAt ||
+          command.maxRuns <= task.config.budget.maxRuns ||
+          command.maxRuns <= task.runsUsed ||
+          this.db.sql
+            .prepare("SELECT 1 FROM runs WHERE task_id=? AND status!='stopped'")
+            .get(id) ||
+          this.db.sql
+            .prepare('SELECT 1 FROM workspace_access WHERE task_id=?')
+            .get(id)
+        )
+          throw new RelayError(
+            'conflict',
+            'budget amendment requires stopped ownership, remaining original time and a strictly higher finite run limit',
+          );
+        const saved = this.save(task, {
+          ...task,
+          config: {
+            ...task.config,
+            budget: { ...task.config.budget, maxRuns: command.maxRuns },
+          },
+        });
+        const audit = budgetAmendmentSchema.parse({
+          schemaVersion: 1,
+          taskId: id,
+          taskVersion: saved.version,
+          source: 'local-user',
+          approval: command.approval,
+          previousBudget: task.config.budget,
+          budget: saved.config.budget,
+          runsUsed: task.runsUsed,
+          iterationsUsed: task.iterationsUsed,
+          infrastructureRetriesUsed: task.infrastructureRetriesUsed,
+          deadlineAt: task.deadlineAt,
+          requirementVersion: task.requirementVersion,
+          codeRevision: task.codeRevision,
+        });
+        this.db.sql
+          .prepare('INSERT INTO budget_amendments VALUES(?,?,?)')
+          .run(id, saved.version, JSON.stringify(audit));
+        this.append(
+          id,
+          null,
+          `budget:${saved.version}`,
+          'task.run_budget_amended',
+          `run limit ${task.config.budget.maxRuns} -> ${command.maxRuns}; private audit version ${saved.version}; counters and deadline unchanged`,
+        );
+        return saved;
+      }
       if (terminal.has(task.status))
         throw new RelayError('conflict', 'terminal tasks cannot be changed');
       let next: Task = { ...task };
@@ -457,5 +516,18 @@ export class Tasks {
       .prepare('SELECT document FROM decisions WHERE task_id=? ORDER BY rowid')
       .all(id)
       .map((row) => decisionSchema.parse(JSON.parse(String(row.document))));
+  }
+  budgetChanges(id: string) {
+    return this.db.sql
+      .prepare(
+        'SELECT document FROM budget_amendments WHERE task_id=? ORDER BY task_version',
+      )
+      .all(id)
+      .map((row) => {
+        const record = budgetAmendmentSchema.parse(
+          JSON.parse(String(row.document)),
+        );
+        return { ...record, approval: redact(record.approval, this.secrets) };
+      });
   }
 }

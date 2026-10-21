@@ -65,6 +65,7 @@ const migrations = [
   CREATE TABLE github_ci (task_id TEXT PRIMARY KEY REFERENCES tasks(id), document TEXT NOT NULL CHECK(json_valid(document))) STRICT;
   CREATE TABLE github_inbox (task_id TEXT NOT NULL REFERENCES tasks(id), event_key TEXT NOT NULL, document TEXT NOT NULL CHECK(json_valid(document)), disposition TEXT NOT NULL, PRIMARY KEY(task_id,event_key)) STRICT;
   CREATE TABLE github_own_events (task_id TEXT NOT NULL REFERENCES tasks(id), event_id INTEGER NOT NULL, PRIMARY KEY(task_id,event_id)) STRICT;`,
+  `CREATE TABLE budget_amendments (task_id TEXT NOT NULL REFERENCES tasks(id), task_version INTEGER NOT NULL, document TEXT NOT NULL CHECK(json_valid(document)), PRIMARY KEY(task_id,task_version)) STRICT;`,
 ];
 
 export class Database {

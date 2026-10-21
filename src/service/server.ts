@@ -311,6 +311,7 @@ export async function startService(options: {
             delivered:
               deliveries.get(id)?.status === 'complete' && issues.length === 0,
             requirements: tasks.requirements(id),
+            budgetChanges: tasks.budgetChanges(id),
             questions: tasks.questions(id),
             ...(workflow
               ? {

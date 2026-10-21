@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { configSchema, profileSchema } from './config.ts';
+import { configSchema, profileSchema, budgetSchema } from './config.ts';
 
 export const idSchema = z.uuid();
 export const versionSchema = z.number().int().positive();
@@ -168,6 +168,16 @@ export const createTaskSchema = z.strictObject({
 export type CreateTask = z.infer<typeof createTaskSchema>;
 export const commandSchema = z.discriminatedUnion('action', [
   z.strictObject({
+    action: z.literal('budget'),
+    expectedVersion: versionSchema,
+    maxRuns: z.number().int().positive().max(100),
+    approval: z
+      .string()
+      .min(1)
+      .max(2048)
+      .refine((s) => s.trim().length > 0),
+  }),
+  z.strictObject({
     action: z.literal('revise'),
     expectedVersion: versionSchema,
     requirementVersion: versionSchema,
@@ -186,3 +196,18 @@ export const commandSchema = z.discriminatedUnion('action', [
   }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
+export const budgetAmendmentSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  taskId: idSchema,
+  taskVersion: versionSchema,
+  source: z.literal('local-user'),
+  approval: z.string().min(1).max(2048),
+  previousBudget: budgetSchema,
+  budget: budgetSchema,
+  runsUsed: z.number().int().nonnegative(),
+  iterationsUsed: z.number().int().nonnegative(),
+  infrastructureRetriesUsed: z.number().int().nonnegative(),
+  deadlineAt: z.number().int().positive(),
+  requirementVersion: versionSchema,
+  codeRevision: revisionSchema,
+});

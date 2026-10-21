@@ -17,6 +17,7 @@ node dist/cli.js doctor [--data-dir DIR]
 node dist/cli.js task import --issue N --key KEY [--data-dir DIR]
 node dist/cli.js task publish|reconcile-delivery|complete-delivery|cancel-delivery ID --version N [--data-dir DIR]
 node dist/cli.js task feedback ID --version N --input JSON_FILE [--data-dir DIR]
+node dist/cli.js task budget ID --version N --max-runs N --input APPROVAL_FILE [--data-dir DIR]
 node dist/cli.js task create --repo DIR --input FILE --key KEY [--data-dir DIR]
 node dist/cli.js task status ID [--data-dir DIR]
 node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
       key: { type: 'string' },
       issue: { type: 'string' },
       version: { type: 'string' },
+      'max-runs': { type: 'string' },
       question: { type: 'string' },
       'question-version': { type: 'string' },
       'requirement-version': { type: 'string' },
@@ -179,22 +181,30 @@ async function main(): Promise<void> {
       );
     } else {
       if (
-        !['answer', 'revise', 'pause', 'resume', 'cancel'].includes(
+        !['answer', 'revise', 'pause', 'resume', 'cancel', 'budget'].includes(
           action ?? '',
         )
       )
         throw new RelayError('invalid', 'unknown task action');
       validateOptions(
-        action === 'answer'
-          ? ['version', 'question', 'question-version', 'input']
-          : action === 'revise'
-            ? ['version', 'requirement-version', 'input']
-            : ['version'],
+        action === 'budget'
+          ? ['version', 'max-runs', 'input']
+          : action === 'answer'
+            ? ['version', 'question', 'question-version', 'input']
+            : action === 'revise'
+              ? ['version', 'requirement-version', 'input']
+              : ['version'],
         3,
       );
       const command = commandSchema.parse({
         action,
         expectedVersion: Number(requireOption('version')),
+        ...(action === 'budget'
+          ? {
+              maxRuns: Number(requireOption('max-runs')),
+              approval: readInput(requireOption('input')),
+            }
+          : {}),
         ...(action === 'revise'
           ? {
               requirementVersion: Number(requireOption('requirement-version')),
