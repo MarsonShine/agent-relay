@@ -91,6 +91,7 @@ export class WorkspaceExecutor implements Executor {
       throw new RelayError('conflict', 'workspace preparation was cancelled');
     const handoff = executionRequestSchema.parse({
       ...request,
+      run: this.access.runs.get(run.id),
       workspace: this.access.declaration(lease),
     });
     state.invoked = true;
