@@ -6,7 +6,7 @@
 
 GitHub 实现 [PR #6](https://github.com/MarsonShine/agent-relay/pull/6) 的 head 为 `5864647d214365cbe2e6aa838f4798453c98317e`，已于 2026-10-21 合并。随后联调 PR #5 经 PR #7 进入 main；当前基线为 `94b9ba77b98c0213d50df19c5c66efe233049549`。相对 `5864647`，该基线只多出 `examples/m4-feedback.md`，生产实现一致。
 
-收尾工作位于 `codex/v1-closeout`，从上述 main 基线创建。本轮已获提交、推送及创建 PR 的授权；不合并、不创建发布标签、不发布。`docs/m4/verification.json` 是 M4 验收时点的记录，包含当时 PR 未合并的事实；不将它改写为当前发布验收。PR #6 的 GitHub review 列表为空，合并状态本身不能证明正式发布评审通过。
+收尾工作位于 `codex/v1-closeout`，从上述 main 基线创建。本轮已获提交、推送及创建 PR 的授权，已创建 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8)；不合并、不创建发布标签、不发布。`docs/m4/verification.json` 是 M4 验收时点的记录，包含当时 PR 未合并的事实；不将它改写为当前发布验收。PR #6 的 GitHub review 列表为空，合并状态本身不能证明正式发布评审通过。
 
 ## RC1：租约测试稳定性
 
@@ -66,3 +66,11 @@ GitHub 实现 [PR #6](https://github.com/MarsonShine/agent-relay/pull/6) 的 hea
 ## Harness
 
 本轮只读状态核查确认 AGENTS.md 非空且无管理块，两个适配文件缺失。按会话提供的仓库规则，`adopt --write` 仍需单独确认；未执行迁移，也未修改 AGENTS.md。下列状态文件为项目收尾记录，不表示已采用 Harness。
+
+## PR 交付与发布评审
+
+修复提交：`b52c8b7be9a032bf01086ffeadbea7bfc1f4da39`，基线为上述 main。该提交的 [push CI](https://github.com/MarsonShine/agent-relay/actions/runs/39706038566) 和 [PR CI](https://github.com/MarsonShine/agent-relay/actions/runs/39706126298) 均在 attempt 1 完成 Windows/Linux 检查，未重跑。
+
+评审结论：本轮变更未发现阻塞缺陷。核对了启动与续接的过期边界、测试时钟隔离及恢复、生产租约规则未变、完整门禁未弱化、依赖版本未变、Apache-2.0 正文与元数据一致、文档链接及支持平台声明。测试修复没有更改生产实现或 CI 配置。本地 201 项通过和负向验证记录保留；两平台 CI 的实际结果绑定上述修复提交。
+
+该结论是本轮提交的发布准备评审，不是 GitHub 独立批准，也不授权合并或发布。真实业务试点明确暂缓，旧 unknown 实例与 Harness 状态保持不变。本文及状态/验证文件的后续补记仅修改文档；最终文档提交的精确 SHA、全部 CI 结果和最终评审结论记录在 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8) 的正文与 Checks 中，不能将上述修复提交的绿色状态自动视为后续提交通过。

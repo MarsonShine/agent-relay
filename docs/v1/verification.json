@@ -6,8 +6,6 @@
   "baselineRevision": "94b9ba77b98c0213d50df19c5c66efe233049549",
   "implementationRevision": "5864647d214365cbe2e6aa838f4798453c98317e",
   "branch": "codex/v1-closeout",
-  "candidateRevision": null,
-  "uncommitted": true,
   "published": false,
   "productionSourceChanged": false,
   "fileHashes": {
@@ -17,18 +15,18 @@
     "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
     "README.md": "b8377a0f576acd118b7430989ce3ddcb5a98c00914d8b342f58f21e6e0df71bf",
     "docs/implementation-plan.md": "bab52a60c7a1630d8bb987792d73189a7c17bc10f1f9fb5a04a3e1d9da77fb4f",
-    "docs/v1-closeout.md": "517a962c6f1ad4bc48408bff52d3dbdb9a428734c099fd8bd7866d6b0506ef4e",
-    "docs/status.md": "ab046bf8c1e769a46c862b6eb74fb6eb7dce3ff2e5d2b2423c79c87e6186da70",
-    "docs/tasks/active.md": "52544d419adf3e6504d5fb2368aa15561d4a6cf0ea153c936401473670d5f9cd"
+    "docs/v1-closeout.md": "8be6879cec62ee45151603c8301abaa2c09724d016de7c0301c67291e32aab55",
+    "docs/status.md": "5d97f7fa4a4b27b6d08a9061d70bdb89d6ce74dfd58f8b7d52c8b4ec25b1af43",
+    "docs/tasks/active.md": "e76f0ef95c7fdb80a7a061e5846312d5b9ba2e55f425e051825873654852cb1c"
   },
   "requirements": {
     "RC1": {
       "scope": "Deterministic renewed and expired leases for start and continuation",
-      "status": "passed_locally"
+      "status": "passed_windows_and_linux"
     },
     "RC2": {
       "scope": "Implementation source, license, platform and usage review",
-      "status": "preparation_checked_final_candidate_ci_pending"
+      "status": "reviewed_no_blocking_findings_for_validated_revision"
     },
     "RC3": {
       "scope": "New real business pilot with outcome, intervention and usage metrics",
@@ -85,9 +83,23 @@
     "countsForUncommittedCandidate": false
   },
   "candidateCI": {
-    "windows": "not_run",
-    "linux": "not_run",
-    "reason": "Local candidate is not committed or pushed"
+    "revision": "b52c8b7be9a032bf01086ffeadbea7bfc1f4da39",
+    "windows": "success",
+    "linux": "success",
+    "attempt": 1,
+    "runs": [
+      {
+        "event": "push",
+        "id": 39706038566,
+        "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39706038566"
+      },
+      {
+        "event": "pull_request",
+        "id": 39706126298,
+        "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39706126298"
+      }
+    ],
+    "coversSubsequentDocumentationCommits": false
   },
   "releaseReview": {
     "scope": [
@@ -121,7 +133,11 @@
     "nativeCodexPlatform": "Windows",
     "nativeCodexVersion": "0.163.0-alpha.10.2",
     "linuxNative": "disabled",
-    "macOS": "unverified"
+    "macOS": "unverified",
+    "reviewedRevision": "b52c8b7be9a032bf01086ffeadbea7bfc1f4da39",
+    "verdict": "no_blocking_findings",
+    "merged": false,
+    "released": false
   },
   "pilot": {
     "status": "deferred_by_user",
@@ -150,5 +166,7 @@
     "diffWhitespace": "passed",
     "installedTopLevelDependencies": "match_package_json"
   },
-  "evidenceScope": "Pre-push local validation snapshot; exact remote revisions and review results are recorded in the PR."
+  "evidenceScope": "Local checks plus exact-revision CI for the fix commit; subsequent documentation receipt commits require their own PR Checks. Final head review is recorded in the PR body.",
+  "validatedRevision": "b52c8b7be9a032bf01086ffeadbea7bfc1f4da39",
+  "pullRequest": "https://github.com/MarsonShine/agent-relay/pull/8"
 }
