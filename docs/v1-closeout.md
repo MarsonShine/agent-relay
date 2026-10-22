@@ -84,3 +84,11 @@ GitHub 实现 [PR #6](https://github.com/MarsonShine/agent-relay/pull/6) 的 hea
 修复在确认子控制器 exit 后，从持久化记录读取最终 leaseUntil 再注入过期。after-spawn 用例显式加入一次观察后的续租，使旧快照路径必定受到检验；四个崩溃点都必须确认实际到达检查点，不能仅凭 Run 存在继续测试。生产实现未改动，所有权保留、停止凭证、副作用不重放、预算和重开断言均保留。
 
 验证：四个崩溃点全部通过；临时改回旧快照后，after-spawn 用例在 active/stopped 断言处准确失败，随后已恢复修复。类型和格式检查通过。前述全量本机记录及早期 CI 保留其原版本范围；最新测试修订的完整 Windows/Linux 门禁以 PR 当前提交检查为准。
+
+## 新用户文档与示例
+
+README 以安装、启动服务、提交第一个模拟任务和读取结果为入口；[完整使用手册](usage.md) 覆盖 6 个 demo、全部 17 个业务 CLI 命令、配置参考、状态/成果、恢复与排错。[示例种子](../examples/tutorial/README.md) 提供可复制到独立仓库的实现和三条验收测试，初始保留一个有意暴露的业务缺陷。
+
+文档验证通过：七种模拟场景经真实 CLI/服务执行，覆盖幂等创建、查询/事件分页/成果读取、答复、暂停、预算追加、需求替换、恢复和取消；无模型调用。示例种子基线 2 通过/1 预期失败，私有副本上的参考修复 3 通过。34 段 PowerShell 示例语法检查、38 个本地链接/锚点检查和示例格式检查通过。
+
+真实 Codex 与 GitHub 示例已按实现核对命令和配置契约，本轮未运行付费 demo、未创建演示 PR；不将这些文档检查当作真实业务试点。教程不扩展当前支持的 Codex 版本。此前崩溃夹具修复 `e9e4613bb3982b31754eada0e2167c7a55686a59` 的 [push](https://github.com/MarsonShine/agent-relay/actions/runs/39707529998) 与 [PR](https://github.com/MarsonShine/agent-relay/actions/runs/39707535592) Windows/Linux 检查均成功；本轮文档提交的结果仍以 PR 当前 SHA 为准。

@@ -13,12 +13,16 @@
     "package.json": "f22544b577f8afa8a79697d6f0c65d95f3edcf3ab35c0878e4d5a6bbf784e5cc",
     "package-lock.json": "dbfe46f974024660e2aa0399d5a0381901e235fdf411c22cebc6661e7330f283",
     "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
-    "README.md": "b8377a0f576acd118b7430989ce3ddcb5a98c00914d8b342f58f21e6e0df71bf",
+    "README.md": "ee7ce4d39abbb47ba9c97bec968de1ee675c521f2e0d37a6a7b485adc710c635",
     "docs/implementation-plan.md": "bab52a60c7a1630d8bb987792d73189a7c17bc10f1f9fb5a04a3e1d9da77fb4f",
-    "docs/v1-closeout.md": "0fb4942d37bc5fb814c3c5e90c47cf9d3531a78987ce43ed259af9b94ae3a555",
-    "docs/status.md": "6809dca4876ba4ee58e80ea0be277813686ca5ff22ea060a6fb49ba6a9a8c14f",
-    "docs/tasks/active.md": "15e40b4b9ac1a74587e75713a8d7d8cc5f3dd3e1071f48d62cc2b529d2ec8484",
-    "test/recovery-crash.test.ts": "807ca3ea3c596fbb03ad4fd351ed8461bfe5f0d68c50e145076f0e750ba8d794"
+    "docs/v1-closeout.md": "c267cb5c2c204f40ba32047cc354c96e88e5f50981e16eb71bfedd86b9d5fe95",
+    "docs/status.md": "73053c16eaa023a5309d99bde79f9b8f6afe5b8ce0d89828810a5e148a1431b7",
+    "docs/tasks/active.md": "d2552132004c0676c8481010037397585bc867a62fb062788daca392a155e21f",
+    "test/recovery-crash.test.ts": "807ca3ea3c596fbb03ad4fd351ed8461bfe5f0d68c50e145076f0e750ba8d794",
+    "docs/usage.md": "9b7c30b2fb350e380afa62b36b338db94d47caddd952a8208304363b9a91f989",
+    "examples/tutorial/README.md": "8eaf1056982824b74205a2b79ddbb1d8447ccb6062eb5ebe18dda841efa6fd3d",
+    "examples/tutorial/label.mjs": "a95411b46e591c362ea0fe890c692d957c9cb1fa36e4fb5c0bd323538838dc58",
+    "examples/tutorial/label.test.mjs": "b65aeb81836039e2ad6caf9fcc9e13fe4867cfe512f7dc7c0f4a7702e6f944f7"
   },
   "requirements": {
     "RC1": {
@@ -183,6 +187,49 @@
     "typecheck": "passed",
     "format": "passed",
     "productionSourceChanged": false,
-    "fullCI": "See final PR head Checks; earlier CI does not validate this followup"
+    "fullCI": "Windows/Linux passed for validatedRevision; final documentation head is checked separately in PR",
+    "validatedRevision": "e9e4613bb3982b31754eada0e2167c7a55686a59",
+    "ciRuns": [
+      39707529998,
+      39707535592
+    ]
+  },
+  "usageDocumentation": {
+    "guide": "docs/usage.md",
+    "demos": 6,
+    "cliCommands": 17,
+    "powershellBlocksParsed": 34,
+    "localLinksAndAnchorsChecked": 38,
+    "simulationScenariosPassed": [
+      "success",
+      "input",
+      "slow",
+      "failure",
+      "missing-terminal",
+      "duplicate",
+      "cancel-race"
+    ],
+    "cliFlows": [
+      "create/idempotency",
+      "doctor",
+      "status",
+      "events/pagination",
+      "artifact reading",
+      "answer",
+      "pause",
+      "budget",
+      "revise",
+      "resume",
+      "cancel"
+    ],
+    "demoSeed": {
+      "baselinePassed": 2,
+      "baselineExpectedFailures": 1,
+      "referenceImplementationPassed": 3
+    },
+    "realCodexDemoRun": false,
+    "realGitHubDemoRun": false,
+    "modelCalls": 0,
+    "scope": "Real-model and remote-write recipes checked against implementation only; not a new business pilot"
   }
 }
