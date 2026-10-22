@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "contract": "v1-closeout-v1",
+  "checkedOn": "2026-10-22",
+  "timezone": "Asia/Shanghai",
+  "baselineRevision": "94b9ba77b98c0213d50df19c5c66efe233049549",
+  "implementationRevision": "5864647d214365cbe2e6aa838f4798453c98317e",
+  "branch": "codex/v1-closeout",
+  "candidateRevision": null,
+  "uncommitted": true,
+  "published": false,
+  "productionSourceChanged": false,
+  "fileHashes": {
+    "test/workspace-access.test.ts": "d9445144f407131cae4a825046901d80eabe564215c2cc9f6c744cf028d9fcd4",
+    "package.json": "f22544b577f8afa8a79697d6f0c65d95f3edcf3ab35c0878e4d5a6bbf784e5cc",
+    "package-lock.json": "dbfe46f974024660e2aa0399d5a0381901e235fdf411c22cebc6661e7330f283",
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "README.md": "b8377a0f576acd118b7430989ce3ddcb5a98c00914d8b342f58f21e6e0df71bf",
+    "docs/implementation-plan.md": "bab52a60c7a1630d8bb987792d73189a7c17bc10f1f9fb5a04a3e1d9da77fb4f",
+    "docs/v1-closeout.md": "517a962c6f1ad4bc48408bff52d3dbdb9a428734c099fd8bd7866d6b0506ef4e",
+    "docs/status.md": "ab046bf8c1e769a46c862b6eb74fb6eb7dce3ff2e5d2b2423c79c87e6186da70",
+    "docs/tasks/active.md": "52544d419adf3e6504d5fb2368aa15561d4a6cf0ea153c936401473670d5f9cd"
+  },
+  "requirements": {
+    "RC1": {
+      "scope": "Deterministic renewed and expired leases for start and continuation",
+      "status": "passed_locally"
+    },
+    "RC2": {
+      "scope": "Implementation source, license, platform and usage review",
+      "status": "preparation_checked_final_candidate_ci_pending"
+    },
+    "RC3": {
+      "scope": "New real business pilot with outcome, intervention and usage metrics",
+      "status": "deferred_by_user"
+    }
+  },
+  "stability": {
+    "failedCI": "https://github.com/MarsonShine/agent-relay/actions/runs/39577921172/attempts/1",
+    "failedJobId": 119147967060,
+    "failure": "Runs.renew rejected an expired lease in the test's real setInterval callback",
+    "fixLayer": "test fixture clock; production lease enforcement unchanged",
+    "focused": {
+      "command": "node --test --test-name-pattern='receives the renewed lease|rejects a lease that expires' test/workspace-access.test.ts",
+      "passed": 4,
+      "failed": 0
+    },
+    "negativeControl": {
+      "mutation": "Pass the original Run snapshot instead of reloading it before backend invocation",
+      "expectedFailures": 2,
+      "observedFailures": 2,
+      "failureAssertion": "r.run.leaseUntil > Date.now()",
+      "productionSourceRestored": true
+    }
+  },
+  "windowsCheck": {
+    "command": "npm run check",
+    "node": "26.8.2",
+    "npm": "11.14.1",
+    "status": "passed",
+    "exitCode": 0,
+    "typecheck": "passed",
+    "format": "passed",
+    "build": "passed",
+    "tests": 201,
+    "passed": 201,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "durationMs": 262009.4946,
+    "environment": "Windows with test-owned process termination permitted",
+    "privateLogSha256": "3c53316614b4ca4e4eec42e71c215c4d9e7ea37f9fc1bfde3b12d105c4eef7d5"
+  },
+  "restrictedEnvironmentAttempt": {
+    "completed": false,
+    "status": "stopped_after_environment_failures",
+    "reason": "Windows taskkill denied termination of test-owned processes; confirmed using a separate owned child",
+    "countedAsPassed": false,
+    "processesReportedDuringStopAbsentOnRecheck": true
+  },
+  "priorCI": {
+    "revision": "94b9ba77b98c0213d50df19c5c66efe233049549",
+    "url": "https://github.com/MarsonShine/agent-relay/actions/runs/39581142438",
+    "conclusion": "success",
+    "countsForUncommittedCandidate": false
+  },
+  "candidateCI": {
+    "windows": "not_run",
+    "linux": "not_run",
+    "reason": "Local candidate is not committed or pushed"
+  },
+  "releaseReview": {
+    "scope": [
+      "Local CLI and authenticated service",
+      "Workspace leases and execution handoff",
+      "Owned process recovery",
+      "Local candidate acceptance",
+      "GitHub intents, publication and reconciliation",
+      "Trusted feedback, CI binding and budgets",
+      "License and dependency metadata",
+      "Supported platforms and documented commands"
+    ],
+    "otherConfirmedProductionDefects": [],
+    "independentApproval": false,
+    "implementationPullRequest": {
+      "number": 6,
+      "state": "merged",
+      "headRevision": "5864647d214365cbe2e6aa838f4798453c98317e",
+      "mergeRevision": "17029e81ec20673d7626a2b34d935b4c1cfd9f3f",
+      "githubReviews": 0
+    },
+    "integrationPullRequests": [
+      5,
+      7
+    ],
+    "integrationPullRequestsState": "merged",
+    "packageVersion": "0.1.0",
+    "npmPrivate": true,
+    "license": "Apache-2.0",
+    "licenseSource": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "nativeCodexPlatform": "Windows",
+    "nativeCodexVersion": "0.163.0-alpha.10.2",
+    "linuxNative": "disabled",
+    "macOS": "unverified"
+  },
+  "pilot": {
+    "status": "deferred_by_user",
+    "newModelCalls": 0,
+    "successRate": null,
+    "humanInterventions": null,
+    "inputTokens": null,
+    "outputTokens": null,
+    "monetaryCost": null
+  },
+  "retainedHistory": {
+    "oldFailedTasksReclassified": false,
+    "unknownAttempt8Touched": false
+  },
+  "harness": {
+    "statusCommandRun": true,
+    "managedBlock": false,
+    "adopted": false,
+    "reason": "Non-empty AGENTS.md requires separate adoption confirmation"
+  },
+  "additionalChecks": {
+    "documentationLinks": "passed",
+    "lineEndings": "passed",
+    "licenseMetadata": "passed",
+    "builtCliHelp": "passed",
+    "diffWhitespace": "passed",
+    "installedTopLevelDependencies": "match_package_json"
+  },
+  "evidenceScope": "Pre-push local validation snapshot; exact remote revisions and review results are recorded in the PR."
+}

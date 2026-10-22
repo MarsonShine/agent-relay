@@ -441,36 +441,79 @@ test('registered implementation worktree reaches Codex adapter through a fake CL
   assert.equal(occupied(f), 0);
 });
 
-test('slow workspace preparation hands the backend the renewed lease, not the expired claim snapshot', async (t) => {
-  const f = workspaceFixture(t),
-    task = f.tasks.get(f.task.id);
-  f.db.transaction(() =>
-    f.tasks.save(task, { ...task, config: { ...task.config, leaseMs: 1000 } }),
-  );
-  const run = claim(f),
-    runs = new Runs(f.tasks),
-    backend = new ProbeExecutor();
-  const timer = setInterval(() => runs.renew(run), 200);
-  try {
+for (const continuation of [false, true]) {
+  test(`${continuation ? 'continuation' : 'start'} receives the renewed lease after preparation crosses initial expiry`, async (t) => {
+    const f = workspaceFixture(t),
+      task = f.tasks.get(f.task.id);
+    // Only Date is controlled; real Git I/O and its process timers remain live.
+    t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    f.db.transaction(() =>
+      f.tasks.save(task, {
+        ...task,
+        config: { ...task.config, leaseMs: 1000 },
+      }),
+    );
+    const run = claim(f),
+      runs = new Runs(f.tasks),
+      backend = new ProbeExecutor();
     backend.effect = (r) => {
       assert.ok(
         Date.now() > run.leaseUntil,
         'fixture preparation must cross initial expiry',
       );
       assert.ok(r.run.leaseUntil > Date.now());
+      assert.equal(r.run.leaseUntil, runs.get(run.id).leaseUntil);
       assert.equal(r.run.owner, run.owner);
       assert.deepEqual(r.run.evidence, run.evidence);
     };
     const executor = new WorkspaceExecutor(backend, f.manager);
     const prepare = f.manager.prepare.bind(f.manager);
     f.manager.prepare = async (...args) => {
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-      return prepare(...args);
+      const workspace = await prepare(...args);
+      t.mock.timers.tick(800);
+      runs.renew(run);
+      t.mock.timers.tick(300);
+      return workspace;
     };
-    const result = await consume(await executor.start(request(f, run)));
+    const result = await consume(
+      await (continuation
+        ? executor.continue(request(f, run), 'renewed-reference')
+        : executor.start(request(f, run))),
+    );
     assert.equal(result.result.status, 'completed');
+    assert.equal(backend.reference, continuation ? 'renewed-reference' : null);
+    assert.equal(occupied(f), 1);
     runs.finish(run, completed);
-  } finally {
-    clearInterval(timer);
-  }
-});
+    assert.equal(occupied(f), 0);
+  });
+
+  test(`${continuation ? 'continuation' : 'start'} rejects a lease that expires during preparation`, async (t) => {
+    const f = workspaceFixture(t);
+    t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    const run = claim(f),
+      runs = new Runs(f.tasks),
+      backend = new ProbeExecutor(),
+      executor = new WorkspaceExecutor(backend, f.manager);
+    const prepare = f.manager.prepare.bind(f.manager);
+    f.manager.prepare = async (...args) => {
+      const workspace = await prepare(...args);
+      t.mock.timers.setTime(run.leaseUntil);
+      return workspace;
+    };
+    await assert.rejects(
+      continuation
+        ? executor.continue(request(f, run), 'expired-reference')
+        : executor.start(request(f, run)),
+      /active owner/,
+    );
+    assert.equal(backend.seen, null);
+    assert.equal(occupied(f), 0);
+    runs.expire();
+    assert.equal(runs.get(run.id).status, 'unknown');
+    assert.equal(runs.claim(run.taskId, backend.version), null);
+    assert.equal(await executor.cancel(run), 'stopped');
+    assert.equal(await executor.reconcile(run), 'stopped');
+    runs.confirmStopped(run.id);
+    assert.equal(f.tasks.get(run.taskId).status, 'blocked');
+  });
+}

@@ -2,7 +2,7 @@
 
 Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它将需求调查、设计、实现、独立审查和反馈修复组织为可恢复、有验收依据的工作流。
 
-**当前状态：M2 已验收；M3 新控制业务任务已通过；M4 实现、确定性验证和真实 issue→PR→反馈→更新已完成。** M3 原失败任务保持原记录，新任务完成版本化问答、实际提交、可信检查和独立审查，重开服务后仍 accepted，并在最终控制器修订上复核。M4 的 issue #4 已在完全隔离实例中完成真实交付：[PR #5](https://github.com/MarsonShine/agent-relay/pull/5) 仅含操作指南示例，收到授权反馈后经本地修复和独立审查更新同一 PR，当前 SHA 的 Windows/Linux CI 均通过，`delivered:true`。原中断实例的 unknown Run 仍隔离保留，不追认。PR 保持打开，默认不合并。默认服务仍使用模拟执行器；真实 Codex 运行限定 Windows，Linux 保留确定性回归。详见 [M3 契约](docs/m3.md)、[M4 交付记录](docs/m4.md)及历史 [M2 验收](docs/m2.md)。
+**当前状态：M0–M4 已完成，正在进行 v1 稳定性与发布收尾，尚未正式发布。** M3 新业务任务完成版本化问答、实际提交、可信检查和独立审查，重开服务后仍 accepted；原失败任务保持原记录。M4 的 issue #4→PR #5→授权反馈→更新已完成，`accepted:true`、`delivered:true`。截至 2026-10-22，GitHub 上实现 [PR #6](https://github.com/MarsonShine/agent-relay/pull/6) 及联调 PR #5、#7 已合并，main 为 `94b9ba7`；这是历史验收快照之后的仓库状态，不代表应用支持自动合并，也不能替代发布评审。旧 unknown 实例仍隔离保留。收尾范围、检查证据与待决事项见 [v1 收尾记录](docs/v1-closeout.md)，历史证据见 [M3](docs/m3.md) 和 [M4](docs/m4.md)。
 
 ## 产品边界
 
@@ -17,6 +17,14 @@ Agent Relay 是支持多种 Agent 执行后端的本地研发编排工具。它�
 
 工具链固定为 Node **26.8.2**、npm **11.14.1**、TypeScript **5.9.3**；版本分别记录于 `.node-version`、`package.json` 和锁文件。使用内置 `node:sqlite`，无需另装数据库服务。文本换行由 `.gitattributes` 固定为 LF，Windows 检出同样遵守格式门禁。
 
+当前通过源码检出运行，包版本为 `0.1.0`，`private:true` 禁止误发到 npm；产品里程碑 v1 不等于已发布 `1.0.0`。需要 Git 在 PATH 中；启用 GitHub 交付时还需要已认证的 GitHub CLI。真实开发运行需要已认证、可执行的 **Codex CLI `0.163.0-alpha.10.2`**，启动预检会拒绝其他版本，不承诺任意新版兼容。
+
+| 平台 | 当前支持范围 |
+| --- | --- |
+| Windows | 模拟服务、确定性回归及已验证的 Codex 开发/GitHub 交付链路 |
+| Linux | 模拟服务与确定性 CI；真实开发运行时会显式拒绝启动 |
+| macOS | 未验证，不作支持承诺 |
+
 ```powershell
 npm ci
 npm run check
@@ -26,6 +34,8 @@ node dist/cli.js serve --data-dir .agent-relay/runtime
 `npm run check` 执行严格类型检查、格式检查、构建和测试；`npm test` 也会先构建。测试包含真实的模拟子进程、进程树终止和服务强制终止，运行环境必须允许停止测试自身创建的进程。真实 Codex 实验不包含在默认测试中。
 
 服务默认监听 `127.0.0.1:4318`。在另一个终端提交模拟任务：
+
+`doctor` 查询已启动服务的健康状态；首次使用时应先启动 `serve`。真实后端版本预检在带 `--runtime` 的服务启动期间进行。
 
 ```powershell
 '验证模拟任务的状态与证据保存' | Set-Content -Encoding utf8 .agent-relay/task.txt
@@ -79,6 +89,7 @@ node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config
 
 | 文档 | 用途 |
 | --- | --- |
+| [v1 收尾与发布准备](docs/v1-closeout.md) | 稳定性修复、发布评审、证据绑定及真实业务试点门槛 |
 | [M4 GitHub 交付](docs/m4.md) | 来源、发布意图、反馈、CI 与终态边界 |
 | [M3 持续协作与恢复](docs/m3.md) | 需求历史、进程所有权、预算、意图和验证限制 |
 | [M2 当前进度与契约](docs/m2.md) | Codex 适配器、生命周期与后续闭环边界 |
@@ -95,4 +106,4 @@ node dist/cli.js serve --data-dir <private-data-dir> --config <private-m2-config
 
 ## 许可
 
-仓库已公开；开源许可证尚待维护者选择。公开可见不代表已授予开源许可。
+本项目采用 [Apache License 2.0](LICENSE)。依赖保留各自的许可证；源码分发不包含用户凭据、私有运行记录或任务工作树。
