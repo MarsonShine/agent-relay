@@ -15,9 +15,10 @@
     "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
     "README.md": "b8377a0f576acd118b7430989ce3ddcb5a98c00914d8b342f58f21e6e0df71bf",
     "docs/implementation-plan.md": "bab52a60c7a1630d8bb987792d73189a7c17bc10f1f9fb5a04a3e1d9da77fb4f",
-    "docs/v1-closeout.md": "8be6879cec62ee45151603c8301abaa2c09724d016de7c0301c67291e32aab55",
-    "docs/status.md": "5d97f7fa4a4b27b6d08a9061d70bdb89d6ce74dfd58f8b7d52c8b4ec25b1af43",
-    "docs/tasks/active.md": "e76f0ef95c7fdb80a7a061e5846312d5b9ba2e55f425e051825873654852cb1c"
+    "docs/v1-closeout.md": "0fb4942d37bc5fb814c3c5e90c47cf9d3531a78987ce43ed259af9b94ae3a555",
+    "docs/status.md": "6809dca4876ba4ee58e80ea0be277813686ca5ff22ea060a6fb49ba6a9a8c14f",
+    "docs/tasks/active.md": "15e40b4b9ac1a74587e75713a8d7d8cc5f3dd3e1071f48d62cc2b529d2ec8484",
+    "test/recovery-crash.test.ts": "807ca3ea3c596fbb03ad4fd351ed8461bfe5f0d68c50e145076f0e750ba8d794"
   },
   "requirements": {
     "RC1": {
@@ -67,7 +68,8 @@
     "cancelled": 0,
     "durationMs": 262009.4946,
     "environment": "Windows with test-owned process termination permitted",
-    "privateLogSha256": "3c53316614b4ca4e4eec42e71c215c4d9e7ea37f9fc1bfde3b12d105c4eef7d5"
+    "privateLogSha256": "3c53316614b4ca4e4eec42e71c215c4d9e7ea37f9fc1bfde3b12d105c4eef7d5",
+    "appliesToRevision": "b52c8b7be9a032bf01086ffeadbea7bfc1f4da39"
   },
   "restrictedEnvironmentAttempt": {
     "completed": false,
@@ -168,5 +170,19 @@
   },
   "evidenceScope": "Local checks plus exact-revision CI for the fix commit; subsequent documentation receipt commits require their own PR Checks. Final head review is recorded in the PR body.",
   "validatedRevision": "b52c8b7be9a032bf01086ffeadbea7bfc1f4da39",
-  "pullRequest": "https://github.com/MarsonShine/agent-relay/pull/8"
+  "pullRequest": "https://github.com/MarsonShine/agent-relay/pull/8",
+  "recoveryFixtureFollowup": {
+    "failedRevision": "9b71310c014d617cd3b996500d5f76854723fcbd",
+    "failedCI": "https://github.com/MarsonShine/agent-relay/actions/runs/39706658440",
+    "failedAttempt": 1,
+    "failure": "after-spawn expected stopped but found active because expire used a pre-crash lease snapshot",
+    "fix": "Read persisted lease after child exit; force post-observation renewal and assert checkpoint readiness",
+    "focusedPassed": 4,
+    "negativeControlExpectedFailures": 1,
+    "negativeControlObservedFailures": 1,
+    "typecheck": "passed",
+    "format": "passed",
+    "productionSourceChanged": false,
+    "fullCI": "See final PR head Checks; earlier CI does not validate this followup"
+  }
 }

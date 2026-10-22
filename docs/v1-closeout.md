@@ -73,4 +73,14 @@ GitHub 实现 [PR #6](https://github.com/MarsonShine/agent-relay/pull/6) 的 hea
 
 评审结论：本轮变更未发现阻塞缺陷。核对了启动与续接的过期边界、测试时钟隔离及恢复、生产租约规则未变、完整门禁未弱化、依赖版本未变、Apache-2.0 正文与元数据一致、文档链接及支持平台声明。测试修复没有更改生产实现或 CI 配置。本地 201 项通过和负向验证记录保留；两平台 CI 的实际结果绑定上述修复提交。
 
-该结论是本轮提交的发布准备评审，不是 GitHub 独立批准，也不授权合并或发布。真实业务试点明确暂缓，旧 unknown 实例与 Harness 状态保持不变。本文及状态/验证文件的后续补记仅修改文档；最终文档提交的精确 SHA、全部 CI 结果和最终评审结论记录在 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8) 的正文与 Checks 中，不能将上述修复提交的绿色状态自动视为后续提交通过。
+该结论是本轮提交的发布准备评审，不是 GitHub 独立批准，也不授权合并或发布。真实业务试点明确暂缓，旧 unknown 实例与 Harness 状态保持不变。初始文档补记后的 CI 又发现下述崩溃夹具竞态，已追加测试修复。最终提交的精确 SHA、全部 CI 结果和最终评审结论记录在 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8) 的正文与 Checks 中，不能将上述修复提交的绿色状态自动视为后续提交通过。
+
+### 崩溃恢复夹具的续租竞态
+
+提交 `9b71310c014d617cd3b996500d5f76854723fcbd` 的 PR 两平台检查均通过，但 [push Windows 检查](https://github.com/MarsonShine/agent-relay/actions/runs/39706658440) 在首次运行以 200 通过、1 失败结束：after-spawn 崩溃用例预期 stopped，实际 active。该失败保留，未重跑。
+
+根因在测试的过期注入：父进程在检测启动 gate 前读取 Run，子控制器可在该观察与 SIGKILL 之间续租；父进程却继续使用旧 leaseUntil 调用 expire，当前租约因尚未过期而正确保持 active。生产控制器仅核对已隔离的 unknown Run，不应为满足测试而停止有效租约。
+
+修复在确认子控制器 exit 后，从持久化记录读取最终 leaseUntil 再注入过期。after-spawn 用例显式加入一次观察后的续租，使旧快照路径必定受到检验；四个崩溃点都必须确认实际到达检查点，不能仅凭 Run 存在继续测试。生产实现未改动，所有权保留、停止凭证、副作用不重放、预算和重开断言均保留。
+
+验证：四个崩溃点全部通过；临时改回旧快照后，after-spawn 用例在 active/stopped 断言处准确失败，随后已恢复修复。类型和格式检查通过。前述全量本机记录及早期 CI 保留其原版本范围；最新测试修订的完整 Windows/Linux 门禁以 PR 当前提交检查为准。

@@ -70,30 +70,33 @@ for (const point of [
       const runs = new Runs(f.tasks);
       const heartbeat = join(repo, 'heartbeat.json');
       let run;
+      let ready = false;
       for (let i = 0; i < 300; i++) {
         run = runs.forTask(task.id)[0];
-        const ready =
-          point === 'after-change'
-            ? existsSync(heartbeat)
-            : point === 'after-spawn'
-              ? run &&
-                existsSync(
-                  join(
-                    f.directory,
-                    'executions',
-                    'owned',
-                    `${run.id}-${run.owner}`,
-                    'gate',
-                  ),
-                )
-              : existsSync(join(f.directory, 'checkpoint'));
+        ready = !!(point === 'after-change'
+          ? existsSync(heartbeat)
+          : point === 'after-spawn'
+            ? run &&
+              existsSync(
+                join(
+                  f.directory,
+                  'executions',
+                  'owned',
+                  `${run.id}-${run.owner}`,
+                  'gate',
+                ),
+              )
+            : existsSync(join(f.directory, 'checkpoint')));
         if (ready) break;
         await delay(20);
       }
       assert.ok(run, errors);
-      if (point === 'after-change') assert.ok(existsSync(heartbeat), errors);
-      else if (point !== 'after-spawn')
-        assert.ok(existsSync(join(f.directory, 'checkpoint')), errors);
+      assert.ok(ready, errors);
+      if (point === 'after-spawn') {
+        // Force a final heartbeat after observation to exercise a stale snapshot.
+        const renewed = runs.renew(run, runs.get(run.id).leaseUntil - 1);
+        assert.ok(renewed.leaseUntil > run.leaseUntil);
+      }
       if (child.exitCode === null && child.signalCode === null)
         child.kill('SIGKILL');
       await exited;
@@ -122,7 +125,8 @@ for (const point of [
           new Evidence(tasks, join(f.directory, 'evidence')),
           backend,
         );
-        recoveryRuns.expire(run.leaseUntil);
+        // The child can renew after our observation; only its exit fences renewals.
+        recoveryRuns.expire(recoveryRuns.get(run.id).leaseUntil);
         await controller.tick();
         assert.equal(recoveryRuns.get(run.id).status, 'stopped');
         const recovered = tasks.get(task.id);

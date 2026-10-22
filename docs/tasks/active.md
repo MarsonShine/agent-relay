@@ -5,6 +5,8 @@
 - 基线：`94b9ba77b98c0213d50df19c5c66efe233049549`；本地分支 `codex/v1-closeout`。
 - 已处理：Windows 租约测试根因定位、确定性时间与到期拒绝覆盖；Apache-2.0；实现 PR 和平台/使用边界核对。
 - 本地验证：Windows 完整门禁 201 通过、0 失败、0 跳过；定向用例 4 通过，负向校验 2 次预期失败。见 [收尾验证记录](../v1/verification.json)，证据关联当前文件哈希，不将历史 CI 视为本轮结果。
-- PR 交付：[PR #8](https://github.com/MarsonShine/agent-relay/pull/8)；修复提交 `b52c8b7` 两平台 CI 首次通过，本轮发布准备评审未发现阻塞缺陷。最终文档补记提交的 CI 与精确 SHA 见 PR 正文和 Checks。
+- PR 交付：[PR #8](https://github.com/MarsonShine/agent-relay/pull/8)；修复提交 `b52c8b7` 两平台 CI 首次通过，本轮发布准备评审未发现阻塞缺陷。补充崩溃夹具修复后的最终提交 CI 与精确 SHA 见 PR 正文和 Checks。
 - 后续：真实试点暂缓，版本/标签另行决定；不合并、不发布。
 - 约束：允许本轮提交、推送和创建 PR，不合并、不发布；不启动 A1；不追认旧失败或 unknown 实例；Harness `adopt --write` 单独确认。
+
+补充修复：Windows push CI 暴露崩溃夹具使用旧租约快照的竞态，已改为子控制器退出后读取最终租约；四个崩溃点及旧写法负向校验通过。原失败记录保留，未重跑。完整结果以 PR 当前 SHA 的检查为准。
