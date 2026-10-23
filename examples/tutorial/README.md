@@ -1,6 +1,6 @@
 # 真实代码修复 demo 的种子文件
 
-按 [完整使用手册 Demo 4](../../docs/usage.md#demo-4真实代码修复windows) 把 `label.mjs` 复制到新示例仓库的 `src/label.mjs`，把 `label.test.mjs` 复制到其 `test/label.test.mjs`。测试中的导入路径对应复制后的布局，不要在本目录直接运行它。
+按 [完整使用手册 Demo 4](../../docs/cli-reference.md#demo-4真实代码修复windows) 把 `label.mjs` 复制到新示例仓库的 `src/label.mjs`，把 `label.test.mjs` 复制到其 `test/label.test.mjs`。测试中的导入路径对应复制后的布局，不要在本目录直接运行它。
 
 初始实现只去除首尾空白；第二条测试故意失败，要求把内部连续空白折叠成一个空格。可信检查使用全部三条测试，任务只允许修改 `src/label.mjs`，不允许修改测试。预期实现后 3 项全部通过，并经独立审查后 accepted。
 

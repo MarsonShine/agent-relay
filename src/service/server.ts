@@ -80,6 +80,7 @@ export async function startService(options: {
   port?: number;
   config?: Config;
   autoSchedule?: boolean;
+  signal?: AbortSignal;
   development?: DevelopmentRuntime;
   githubTransport?: Transport;
   githubPush?: Push;
@@ -187,6 +188,7 @@ export async function startService(options: {
     evidence,
     workspaces ? new WorkspaceExecutor(backend, workspaces) : backend,
     workflow,
+    options.signal,
   );
   let listeningPort = 0;
   let schedulerError: string | null = null;
@@ -421,6 +423,7 @@ export async function startService(options: {
     throw error;
   }
   const pump = async () => {
+    if (options.signal?.aborted) return;
     try {
       await controller.tick();
       await github?.tick();
@@ -430,7 +433,7 @@ export async function startService(options: {
       clearInterval(timer);
     }
   };
-  if (options.autoSchedule !== false) {
+  if (options.autoSchedule !== false && !options.signal?.aborted) {
     timer = setInterval(() => {
       void pump();
     }, 100);
