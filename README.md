@@ -27,7 +27,7 @@ npm ci
 npm start
 ```
 
-确认版本分别为 `v26.8.2` 和 `11.14.1`。安装所需版本后再执行 `npm ci`，不要关闭版本检查。以下 Windows 示例使用 **PowerShell 7**；Linux 的等价起步命令见 [使用手册](docs/usage.md#linux-模拟起步)。命令均从本工具仓库根目录执行，文档、示例和源码应来自同一个版本。
+确认版本分别为 `v26.8.2` 和 `11.14.1`。安装所需版本后再执行 `npm ci`，不要关闭版本检查。以下 Windows 示例使用 **PowerShell 7**；Linux 的等价起步命令见 [使用手册](docs/cli-reference.md#linux-模拟起步)。命令均从本工具仓库根目录执行，文档、示例和源码应来自同一个版本。
 
 ## 跑通第一个任务
 
@@ -58,21 +58,21 @@ npm start -- chat --demo
 - 每次启动处理一项任务。上一任务已结束时，新输入创建新任务，不是无边界的连续聊天，也不会自动把前一候选合并到原仓库。
 - 真实模式自动完成的是**本地验收**。它不会自动推送、创建 PR 或合并；GitHub 交付仍走显式管理命令。
 
-更多首次设置示例、已有配置接入和退出行为见 [交互使用](docs/usage.md#交互使用推荐)。`serve`、`task create` 等命令保留给脚本与高级管理，日常交互不用先学它们。
+**如果你要开发的是 `E:\repositories\MS.Microservice`，直接从 [实际项目操作教程](docs/usage.md) 开始。** 教程固定工具目录和任务目录，并给出可分别复制的启动、查询进度、查看结果和退出后回看命令。`serve`、`task create` 等命令保留给脚本与高级管理，日常交互不用先学它们。
 
 ## 下一步怎么用
 
 | 你想做什么 | 入口 |
 | --- | --- |
-| 输入需求并自动完成本地任务 | [交互使用](docs/usage.md#交互使用推荐) |
-| 熟悉任务、结果、版本号与状态 | [基本操作与结果解读](docs/usage.md#基本操作与结果解读) |
-| 演示问题答复 | [Demo 2：等待用户答复](docs/usage.md#demo-2等待用户答复) |
-| 演示暂停、恢复、取消、修改需求和预算 | [Demo 3：控制长任务](docs/usage.md#demo-3控制长任务) |
-| 在小型示例仓库修复真实代码 | [Demo 4：真实代码修复](docs/usage.md#demo-4真实代码修复windows) |
-| 只调查代码，不实施修改 | [Demo 5：只读咨询](docs/usage.md#demo-5只读咨询) |
-| 导入 issue、发布 PR、处理反馈 | [Demo 6：GitHub 交付](docs/usage.md#demo-6github-交付) |
-| 查全部命令和配置参数 | [命令速查](docs/usage.md#命令速查)、[配置参考](docs/usage.md#配置参考) |
-| 处理失败、版本冲突或服务重启 | [排错与恢复](docs/usage.md#排错与恢复) |
+| 输入需求并自动完成本地任务 | [实际项目操作教程](docs/usage.md) |
+| 熟悉任务、结果、版本号与状态 | [基本操作与结果解读](docs/cli-reference.md#基本操作与结果解读) |
+| 演示问题答复 | [Demo 2：等待用户答复](docs/cli-reference.md#demo-2等待用户答复) |
+| 演示暂停、恢复、取消、修改需求和预算 | [Demo 3：控制长任务](docs/cli-reference.md#demo-3控制长任务) |
+| 在小型示例仓库修复真实代码 | [Demo 4：真实代码修复](docs/cli-reference.md#demo-4真实代码修复windows) |
+| 只调查代码，不实施修改 | [Demo 5：只读咨询](docs/cli-reference.md#demo-5只读咨询) |
+| 导入 issue、发布 PR、处理反馈 | [Demo 6：GitHub 交付](docs/cli-reference.md#demo-6github-交付) |
+| 查全部命令和配置参数 | [命令速查](docs/cli-reference.md#命令速查)、[配置参考](docs/cli-reference.md#配置参考) |
+| 处理失败、版本冲突或服务重启 | [排错与恢复](docs/cli-reference.md#排错与恢复) |
 
 真实开发 demo 会调用模型、产生使用量，并在独立任务工作树中创建提交；GitHub demo 还会推送分支和创建 PR。阅读相应章节、核对目标和预算后再执行。示例仓库里的测试故意暴露一个小缺陷，详见 [demo 文件说明](examples/tutorial/README.md)。
 
@@ -96,7 +96,8 @@ M0–M4 已完成，当前进行 v1 收尾。实现 PR #6 和联调 PR #5、#7 �
 
 | 文档 | 用途 |
 | --- | --- |
-| [完整使用手册](docs/usage.md) | 新手教程、全部 CLI 用法、配置、demo 和排错 |
+| [实际项目操作教程](docs/usage.md) | 使用 MS.Microservice：启动、进度、状态、结果和回看 |
+| [命令与配置参考](docs/cli-reference.md) | 全部 CLI 用法、配置、六个 demo 和排错 |
 | [v1 收尾记录](docs/v1-closeout.md) | 修复与发布准备证据 |
 | [M4](docs/m4.md)、[M3](docs/m3.md)、[M2](docs/m2.md) | 交付、恢复、执行器的详细契约与历史验收 |
 | [M1](docs/m1.md)、[M0](docs/m0/README.md) | 控制内核与接入实验 |
