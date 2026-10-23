@@ -10,8 +10,11 @@ import { configSchema, defaultConfig } from './core/config.ts';
 import { RelayError } from './core/errors.ts';
 import { callLocal } from './service/client.ts';
 import { startService } from './service/server.ts';
+import { chat, terminalIO } from './interactive/chat.ts';
 
 const help = `Agent Relay (simulation by default; explicit trusted development runtime required)
+node dist/cli.js                    Interactive setup and prompt (terminal only)
+node dist/cli.js chat [--demo] [--repo DIR] [--data-dir DIR] [--config FILE] [--runtime FILE] [--port PORT]
 node dist/cli.js serve [--data-dir DIR] [--config FILE] [--runtime FILE] [--port PORT]
 node dist/cli.js doctor [--data-dir DIR]
 node dist/cli.js task import --issue N --key KEY [--data-dir DIR]
@@ -24,7 +27,7 @@ node dist/cli.js task events ID [--after N] [--limit N] [--data-dir DIR]
 node dist/cli.js task answer ID --version N --question ID --question-version N --input FILE [--data-dir DIR]
 node dist/cli.js task revise ID --version N --requirement-version N --input FILE [--data-dir DIR]
 node dist/cli.js task pause|resume|cancel ID --version N [--data-dir DIR]
-All output is JSON. Mutations require the task version returned by status.
+Management commands output JSON; chat presents prompts and results. Mutations require the task version returned by status.
 Development runtime permits bounded Codex calls in managed worktrees. GitHub delivery requires a trusted policy and explicit publication; no automatic merge.`;
 function readInput(path: string): string {
   const stat = statSync(path);
@@ -41,6 +44,7 @@ async function main(): Promise<void> {
     allowPositionals: true,
     options: {
       help: { type: 'boolean' },
+      demo: { type: 'boolean' },
       'data-dir': { type: 'string' },
       config: { type: 'string' },
       runtime: { type: 'string' },
@@ -63,8 +67,17 @@ async function main(): Promise<void> {
     return;
   }
   const [group, action, id] = positionals;
+  const interactive = group === 'chat' || group === undefined;
   const directory = resolve(
-    values['data-dir'] ?? join(homedir(), '.agent-relay'),
+    values['data-dir'] ??
+      join(
+        homedir(),
+        interactive
+          ? values.demo
+            ? '.agent-relay-chat-demo'
+            : '.agent-relay-chat'
+          : '.agent-relay',
+      ),
   );
   const requireOption = (key: keyof typeof values): string => {
     const value = values[key];
@@ -82,6 +95,40 @@ async function main(): Promise<void> {
         'unexpected command arguments; use --help',
       );
   };
+  if (interactive) {
+    validateOptions(
+      ['demo', 'repo', 'config', 'runtime', 'port'],
+      group ? 1 : 0,
+    );
+    if (!group && !process.stdin.isTTY) {
+      console.log(help);
+      return;
+    }
+    const io = terminalIO();
+    try {
+      process.exitCode = await chat(
+        {
+          directory,
+          ...(values.demo ? { demo: true } : {}),
+          ...(values.repo ? { repo: values.repo } : {}),
+          ...(values.config ? { config: values.config } : {}),
+          ...(values.runtime ? { runtime: values.runtime } : {}),
+          ...(values.port !== undefined ? { port: Number(values.port) } : {}),
+        },
+        io,
+      );
+    } catch (error) {
+      io.write(
+        error instanceof RelayError
+          ? `未继续执行：${error.message}`
+          : '无法启动或继续。请检查配置、服务占用和文件权限；任务记录保留。',
+      );
+      process.exitCode = io.signal.aborted ? 130 : 1;
+    } finally {
+      io.close();
+    }
+    return;
+  }
   if (group === 'serve') {
     validateOptions(['config', 'runtime', 'port'], 1);
     const config = values.config

@@ -39,6 +39,7 @@ export class Controller {
   readonly evidence: Evidence;
   readonly executor: Executor;
   readonly workflow: LocalWorkflow | undefined;
+  private readonly signal: AbortSignal | undefined;
   private active: Active | null = null;
   private ticking = false;
   private closing = false;
@@ -48,16 +49,18 @@ export class Controller {
     evidence: Evidence,
     executor: Executor,
     workflow?: LocalWorkflow,
+    signal?: AbortSignal,
   ) {
     this.tasks = tasks;
     this.runs = new Runs(tasks);
     this.evidence = evidence;
     this.executor = executor;
     this.workflow = workflow;
+    this.signal = signal;
   }
   async tick(): Promise<void> {
     if (this.failure !== null) throw this.failure;
-    if (this.ticking || this.closing) return;
+    if (this.ticking || this.closing || this.signal?.aborted) return;
     this.ticking = true;
     try {
       this.runs.expire();
@@ -90,6 +93,7 @@ export class Controller {
           this.runs.confirmStopped(run.id);
       }
       await this.workflow?.workspaces.recover();
+      if (this.closing || this.signal?.aborted) return;
       const task = this.tasks
         .list('queued')
         .find((t) => t.retryAt <= Date.now() || t.deadlineAt <= Date.now());
@@ -209,6 +213,7 @@ export class Controller {
       const currentRun = this.runs.get(run.id),
         currentTask = this.tasks.get(run.taskId);
       if (
+        this.signal?.aborted ||
         detached ||
         currentRun.status !== 'active' ||
         currentRun.owner !== run.owner ||

@@ -2,7 +2,7 @@
 
 Agent Relay 在本机把一个研发任务交给 Codex CLI，组织调查、实现、独立审查和可信检查，并保存任务状态与证据。启用 GitHub 配置后，还可以从 issue 创建 PR，处理授权反馈，再更新同一个 PR。
 
-**第一次使用先跑下面的模拟任务。** 它不需要 Codex 或 GitHub 登录，不调用模型，也不会修改目标仓库。确认自己会启动服务、提交任务和读取结果后，再按 [完整使用手册](docs/usage.md) 接入真实项目。
+**日常使用只需一个终端：运行 `npm start`，输入需求，等待结果。** 工具自动启动本机服务、提交任务、显示进度并完成本地验收；需要补充信息时会直接在当前终端提问。第一次使用会引导设置项目，之后自动加载。
 
 ## 安装与运行条件
 
@@ -24,59 +24,47 @@ cd agent-relay
 node --version
 npm --version
 npm ci
-npm run build
-node dist/cli.js --help
+npm start
 ```
 
 确认版本分别为 `v26.8.2` 和 `11.14.1`。安装所需版本后再执行 `npm ci`，不要关闭版本检查。以下 Windows 示例使用 **PowerShell 7**；Linux 的等价起步命令见 [使用手册](docs/usage.md#linux-模拟起步)。命令均从本工具仓库根目录执行，文档、示例和源码应来自同一个版本。
 
 ## 跑通第一个任务
 
-需要两个终端：终端 A 保持服务运行，终端 B 负责提交和查询。`--data-dir` 是服务保存任务的目录，两个终端必须使用同一个值。
-
-**终端 A：启动模拟服务。**
+安装好依赖后，在工具目录执行：
 
 ```powershell
-node dist/cli.js serve --data-dir .agent-relay/tutorial --port 4318
+npm start
 ```
 
-看到包含 `"backend":"simulation"` 和 `"listening":"http://127.0.0.1:4318"` 的 JSON 后，保留这个终端。不要在浏览器打开地址，它是需要认证的本机接口。
+`npm start` 会先构建程序，再进入交互入口。第一次选择“真实开发”或“模拟体验”，并输入目标仓库目录。真实开发还需一次性指定已认证的 Codex 原生程序、允许修改的文件、项目检查命令和调用预算；向导会展示配置，请确认后再执行。程序会保存设置，下次直接出现：
 
-**终端 B：进入同一个工具仓库目录，提交任务。**
+```text
+需求 > 请修复标签格式化函数：去掉首尾空格，空字符串返回 default，并补充测试。
+```
+
+输入一项完整需求并回车后，工具自动推进调查、实现、可信检查和独立审查，显示当前阶段与调用次数。若有歧义，会出现 `答复 >`，直接回答即可。结束时显示答复或变更摘要、候选提交和成果工作树位置，然后关闭本机服务。无需再开第二个终端，也无需手工写需求文件、复制任务 ID 或轮询状态。
+
+**先免费体验这个操作方式：**
 
 ```powershell
-node dist/cli.js doctor --data-dir .agent-relay/tutorial
-'验证任务提交与结果保存' | Set-Content -Encoding utf8NoBOM .agent-relay/tutorial/task.txt
-$created = node dist/cli.js task create --repo . --input .agent-relay/tutorial/task.txt --key tutorial-001 --data-dir .agent-relay/tutorial | ConvertFrom-Json
-$taskId = $created.task.id
-$taskId
+npm start -- chat --demo
 ```
 
-`doctor` 查询已经启动的服务；不是离线安装检测命令。保存打印出的任务 ID，之后用它查结果：
+看到 `需求 >` 后输入任意一句话。正常结束时显示“模拟完成”和模拟成果；它不需要 Codex/GitHub 登录，不调用模型，也不修改仓库。演示设置与真实项目设置保存在不同目录，不会把模拟成功当作业务完成。
 
-```powershell
-$s = node dist/cli.js task status $taskId --data-dir .agent-relay/tutorial | ConvertFrom-Json
-$s.task.status
-$s.accepted
-$s.evidenceIssues
-```
+- 输入目前按一行完整需求读取；长需求可使用后面的文件式管理命令。
+- 运行中按 Ctrl+C，请求暂停并退出；在输入提示处也可输入 `/exit`。下次同样启动，会找回未完成任务；已暂停的任务会先询问是否继续，预算不重置。
+- 每次启动处理一项任务。上一任务已结束时，新输入创建新任务，不是无边界的连续聊天，也不会自动把前一候选合并到原仓库。
+- 真实模式自动完成的是**本地验收**。它不会自动推送、创建 PR 或合并；GitHub 交付仍走显式管理命令。
 
-如果仍是 `queued` 或 `running`，稍后重新执行上面三行查询。正常完成时应看到 `succeeded`、`True` 和空的 `evidenceIssues`。模拟任务的 accepted 只说明模拟证据完整，不代表已经完成真实业务需求。
-
-**读取成果与执行记录。**
-
-```powershell
-$result = $s.artifacts | Where-Object kind -eq result | Select-Object -Last 1
-Get-Content -Raw -LiteralPath (Join-Path .agent-relay/tutorial/evidence $result.sha256)
-node dist/cli.js task events $taskId --after 0 --limit 100 --data-dir .agent-relay/tutorial
-```
-
-成果会说明未执行模型或仓库修改。返回终端 A 按 Ctrl+C 停止服务；下次以相同数据目录和端口启动，还能查询这个任务。重复提交相同 `--key` 和相同内容会返回原任务；想做新的任务就换一个 key。
+更多首次设置示例、已有配置接入和退出行为见 [交互使用](docs/usage.md#交互使用推荐)。`serve`、`task create` 等命令保留给脚本与高级管理，日常交互不用先学它们。
 
 ## 下一步怎么用
 
 | 你想做什么 | 入口 |
 | --- | --- |
+| 输入需求并自动完成本地任务 | [交互使用](docs/usage.md#交互使用推荐) |
 | 熟悉任务、结果、版本号与状态 | [基本操作与结果解读](docs/usage.md#基本操作与结果解读) |
 | 演示问题答复 | [Demo 2：等待用户答复](docs/usage.md#demo-2等待用户答复) |
 | 演示暂停、恢复、取消、修改需求和预算 | [Demo 3：控制长任务](docs/usage.md#demo-3控制长任务) |
@@ -90,7 +78,7 @@ node dist/cli.js task events $taskId --after 0 --limit 100 --data-dir .agent-rel
 
 ## 使用边界
 
-- 默认运行的是模拟执行器。真实执行必须显式提供 `--config` 和 `--runtime`；目前只接入 Codex CLI，没有 API 执行后端。
+- 交互入口首次引导选择模式并保存项目政策；传统 `serve` 默认模拟，真实执行需 `--config` 与 `--runtime`。两种入口都只接入 Codex CLI，没有 API 执行后端。
 - 真实任务在独立工作树中运行；原仓库的未提交修改不会复制进去。项目规则、允许文件与检查命令需要事先确定，issue 或模型文本不能扩大权限。
 - `accepted` 是当前本地候选的验收结果；`delivered` 是 GitHub 交付完成结果。二者都不表示已合并。
 - 进程停止未知时保持隔离，不通过删库、删租约或重复启动来恢复写入。等待人工和暂停也消耗原任务的总期限。
@@ -104,7 +92,7 @@ npm run check
 
 完整检查包含类型、格式、构建和测试。测试会启动并停止自身模拟进程，环境需要允许进程树终止；默认测试不调用真实模型。
 
-M0–M4 已完成，当前进行 v1 收尾。实现 PR #6 和联调 PR #5、#7 已进入 main；本轮收尾见 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8)。尚未正式发布，真实业务试点暂缓；旧失败任务和 unknown 实例保留隔离，不追认成功。
+M0–M4 已完成，当前进行 v1 收尾。实现 PR #6 和联调 PR #5、#7 已进入 main；原收尾 [PR #8](https://github.com/MarsonShine/agent-relay/pull/8) 已合并；当前补充单终端交互入口。尚未正式发布，真实业务试点暂缓；旧失败任务和 unknown 实例保留隔离，不追认成功。
 
 | 文档 | 用途 |
 | --- | --- |

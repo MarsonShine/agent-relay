@@ -1,6 +1,81 @@
 # Agent Relay 使用手册
 
-先从 [README 的第一个模拟任务](../README.md#跑通第一个任务) 开始。本手册接着解释结果、演示交互和任务控制，最后接入真实项目与 GitHub。示例中的 `node dist/cli.js` 都从 Agent Relay 工具仓库根目录执行，不是在目标项目里执行。
+日常使用先看下面的交互入口：一个终端启动、输入需求、等待结果。后面的 `serve` / `task` 部分是脚本与高级管理模式，不是使用工具前必须掌握的步骤。命令都从 Agent Relay 工具仓库根目录执行。
+
+## 交互使用（推荐）
+
+安装依赖后执行 `npm start`。它自动构建并启动交互入口，不需要自己运行 `serve`。已构建时也可用 `node dist/cli.js chat`；直接在终端执行 `node dist/cli.js` 是相同入口。无参数且输入不是终端时只显示帮助，不会意外启动模型；脚本需要明确写 `chat`。
+
+### 第一次设置，以后直接输入需求
+
+首次会询问模式和目标仓库。选择 `2` 是不调用模型的模拟；选择 `1` 是 Windows 真实开发。真实开发会继续询问：
+
+| 向导问题 | 应当填写什么 |
+| --- | --- |
+| Codex 程序 | 已认证的受支持原生 `.exe` 的绝对路径，不是 `.cmd` / `.ps1` 包装器；版本仍严格预检 |
+| 工作树根目录 | 与目标仓库、数据目录分开的目录；默认是数据目录的同级目录 |
+| 允许文件 | 仓库相对路径，用逗号分隔，例如 `src/label.mjs,test/label.test.mjs`；使用 `/`，不使用通配符 |
+| 可信检查程序 | 要运行的真实程序绝对路径。例如先执行 `node -p process.execPath` 可取得 Node 路径 |
+| 检查参数 | JSON 数组，例如 `["--test","test/label.test.mjs"]`；不是拼接的 shell 命令 |
+| 调用预算 | 每任务调用上限，默认 8；总期限秒数，默认 3600，包含人工等待 |
+
+向导使用 GPT-6 Luna、单次最多 180 秒、最多 3 轮修复，设计与审查只读；实现可写已声明范围内的任务工作树。最后会列出仓库、检查命令和预算，输入 `yes` 保存并继续，`no` 退出。它不会替你降低项目检查或扩大文件范围。配置不足、仓库规则不允许、CLI 不兼容或认证不可用时，会停止并给出诊断，不切换为模拟伪装成功。
+
+设置保存在私有数据目录的 `chat.json`，包含项目政策与最后一个任务 ID；不要提交这个文件。默认真实/向导目录是用户主目录的 `.agent-relay-chat`，显式 `--demo` 默认使用 `.agent-relay-chat-demo`。与管理命令默认的 `.agent-relay` 不同，避免接管已有服务。首次使用空闲本机端口，之后沿用该数据目录登记的端口。
+
+### 直接体验输入与结果
+
+```powershell
+npm start -- chat --demo
+```
+
+在 `需求 >` 输入一行需求并回车。工具自动提交、显示阶段与已用调用数，并读取已验收成果。模拟输出会明确说明没有调用模型、没有修改仓库。
+
+真实项目按同样方式使用：首次运行 `npm start` 完成上面的设置，之后再执行 `npm start`，直接在 `需求 >` 输入需求即可。流程只在需要你补充业务信息时出现 `答复 >`；正常情况下不需要手工查询 status、填写版本号或搬运结果文件。
+
+复杂真实示例可使用 [Demo 4](#demo-4真实代码修复windows) 的独立标签项目。向导选择该示例仓库，允许文件填写 `src/label.mjs,test/label.test.mjs`，检查程序填 Node 绝对路径，参数填 `["--test","test/label.test.mjs"]`，再输入 Demo 4 的修复要求。真实运行会产生模型用量并创建本地候选提交。
+
+### 已有配置直接接入
+
+已经写好 config/runtime 时，不必重填向导：
+
+```powershell
+node dist/cli.js chat --config C:/relay-private/config.json --runtime C:/relay-private/runtime.json --data-dir C:/relay-private/session
+```
+
+以上路径是示意，替换成实际文件，session 必须是新的交互数据目录。可以复用已有 config/runtime，但不自动接管原 serve 数据库。运行时中的 repo 用作目标仓库；程序会记住成功预检后的设置。之后只需：
+
+```powershell
+node dist/cli.js chat --data-dir C:/relay-private/session
+```
+
+`--config` 也可单独传模拟配置，例如 `examples/m1.config.json`；真实配置必须配套 `--runtime`。`--demo` 不能与 `--runtime` 一起使用。新项目或切换真实/模拟模式应使用新的 `--data-dir`；同一数据目录不能同时开 chat 和 serve。多个可信检查或更复杂预算可先用文件配置，再通过上述方式加载。
+
+### 中断、重开和结果边界
+
+运行中用 Ctrl+C 请求暂停；程序会关闭自己启动的服务并核对活动执行。暂停不能撤销已经发生的修改。再次以同一数据目录启动时，自动找到未完成任务；暂停状态先询问 `yes` 后恢复，待答复状态直接显示原问题。问题答复仍绑定你看到的问题和任务版本；并发修改产生冲突时停止，不悄悄将旧答复套到新问题。
+
+`/exit` 仅在输入提示处生效。在问题处退出会保留 waiting_user；初始需求处退出不会创建任务。终端 EOF 退出；明确使用管道运行 `chat` 时，初始输入结束后仍等待任务结果，若缺少问题答复则保存待答状态后退出。
+
+每次处理一项任务，完成后退出。再次启动且上一任务已结束，会创建新任务；不会自动继承上一任务的未合并候选。需要连续修改同一业务需求时，应通过已记录的候选和管理命令明确处理，不能把新 prompt 当作原生模型会话续接。
+
+正常真实结果显示答复及来源，或变更摘要、候选 SHA、成果工作树和分支。只有 accepted 为 true 才报本地验收通过；证据缺失、预算耗尽、未知停止、调度异常均不会被当作完成。交互入口不调用发布命令、不自动增加预算；遇到 blocked/recovering 会保存诊断并停止自动推进，必要时按下方排错章节处理。
+
+管理已有交互任务时，先退出 chat。向导设置可以导出为管理命令使用的配置文件，例如 PowerShell 7：
+
+```powershell
+$data = Join-Path $HOME '.agent-relay-chat'
+$saved = Get-Content -Raw (Join-Path $data 'chat.json') | ConvertFrom-Json
+$saved.config | ConvertTo-Json -Depth 30 | Set-Content -Encoding utf8NoBOM (Join-Path $data 'config.json')
+if ($null -ne $saved.runtime) {
+    $saved.runtime | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM (Join-Path $data 'runtime.json')
+    node dist/cli.js serve --config "$data/config.json" --runtime "$data/runtime.json" --data-dir $data
+} else {
+    node dist/cli.js serve --config "$data/config.json" --data-dir $data
+}
+```
+
+把 `$data` 换成实际交互数据目录（`--demo` 的默认值不同）。在另一个终端用同一目录和已保存的任务 ID 执行管理命令，结束管理后先关闭 serve，再启动 chat。不能删除未知实例或新建任务来绕过隔离。
 
 ## 先理解三个目录和两种模式
 
@@ -457,11 +532,12 @@ node dist/cli.js task cancel-delivery $taskId --version $s.task.version --data-d
 
 ## 命令速查
 
-下面覆盖 `node dist/cli.js --help` 的所有命令。每条命令都可附加 `--data-dir DIR`，省略时使用当前用户主目录的 `.agent-relay`。命令行不是交互式聊天窗口；正文通过 UTF-8 文件传入。未知参数会报错。
+下面覆盖 `node dist/cli.js --help` 的所有命令。交互入口直接读取需求；管理命令继续通过 UTF-8 文件传入正文并输出 JSON。管理命令默认数据目录为用户主目录的 `.agent-relay`，chat 的默认目录见上文；管理交互任务时要显式指定同一目录。未知参数会报错。
 
 | 命令（省略共同前缀） | 参数与用途 |
 | --- | --- |
-| `--help` | 显示帮助文本；其他正常业务输出为 JSON，错误 JSON 写入 stderr 并返回非零退出码 |
+| 无参数 / `chat` | 单终端交互；可选 `--demo --repo DIR --config FILE --runtime FILE --data-dir DIR --port PORT`，模式组合限制见交互章节 |
+| `--help` | 显示帮助；chat 使用可读提示，管理命令输出 JSON，错误返回非零退出码 |
 | `serve` | 可选 `--config FILE --runtime FILE --port PORT`；默认模拟、127.0.0.1:4318；已有目录沿用保存的端口 |
 | `doctor` | 查询运行中服务的 backend、调度错误及占用数 |
 | `task create` | 必需 `--repo DIR --input FILE --key KEY`；本地来源任务 |

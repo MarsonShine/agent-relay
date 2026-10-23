@@ -17,6 +17,7 @@
     "test": "node --test --test-concurrency=2 test/*.test.ts scripts/m0/process-probe.test.mts",
     "check": "npm run typecheck && npm run format:check && npm test",
     "start": "node dist/cli.js",
+    "prestart": "npm run build",
     "pretest": "npm run build"
   },
   "devDependencies": {
